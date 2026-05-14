@@ -75,11 +75,22 @@ def upload_image():
 def admin_login():
     """Admin login endpoint"""
     data = request.get_json()
-    email = data.get('email')
+    username = data.get('username') or data.get('email')
     password = data.get('password')
 
-    if not email or not password:
-        return jsonify({'error': 'Email and password required'}), 400
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+
+    # Fixed admin credentials fallback
+    if username == 'admin' and password == 'admin123':
+        access_token = create_access_token(identity='admin')
+        return jsonify({
+            'access_token': access_token,
+            'user': {
+                'username': 'admin',
+                'role': 'admin'
+            }
+        }), 200
 
     conn = get_db_connection()
     if not conn:
@@ -87,7 +98,7 @@ def admin_login():
 
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT user_id, email, password_hash, full_name, role FROM users WHERE email = %s', (email,))
+        cursor.execute('SELECT user_id, email, password_hash, full_name, role FROM users WHERE email = %s', (username,))
         user = cursor.fetchone()
 
         if not user or not bcrypt.check_password_hash(user['password_hash'], password):
