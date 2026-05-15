@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdNU Mosaic</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css">
+<base target="_blank">
+<base target="_blank">
+<base target="_blank">
+</head>
+<body>
+
+<nav id="navbar">
+  <div class="nav-logo">AdNU <span>Mosaic</span></div>
+  <div class="nav-center-links">
+    <a href="adnu-mosaic.html" class="nav-btn">Pins</a>
+    <button class="nav-btn active" onclick="app.showPage('explore')">Pin Map</button>
+    <button class="nav-btn" onclick="app.openCreateModal()">Create Pin</button>
+  </div>
+  <div class="nav-right-links">
+    <button class="nav-btn" onclick="app.showPage('admin')">Admin</button>
+  </div>
+</nav>
+
+<!-- Explore Page -->
+<div id="page-explore" class="page active">
+  <div class="explore-container">
+    <div class="explore-header">
+      <h1>Map</h1>
+      <p>Discover and explore pins across Ateneo de Naga University</p>
+    </div>
+
+    <div class="controls">
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search by title or story..." onkeyup="app.filterPins()">
+        <i class="fas fa-search search-icon"></i>
+      </div>
+      <select id="location-filter" class="filter-select" onchange="app.filterByLocation()">
+        <option value="">All Locations</option>
+      </select>
+    </div>
+
+    <div class="map-container map-container-bordered">
+      <div id="campus-map"></div>
+      <div class="map-legend">
+        <div class="map-legend-title">AdNU Campus Map</div>
+        <div class="map-legend-item"><div class="legend-pin"></div> Pin</div>
+        <div class="map-legend-item">Click pin to view pin details</div>
+        <div class="map-legend-item">Click card to locate on map</div>
+      </div>
+    </div>
+
+    <div id="stats"></div>
+
+    <div id="pins-grid" class="pins-grid"></div>
+  </div>
+</div>
+
+<!-- Create Pin Modal -->
+<div id="create-pin-overlay" class="modal-overlay" style="backdrop-filter: blur(12px); background: rgba(12, 22, 44, 0.55);" onclick="app.closeCreateModal(event)">
+  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+    <button class="modal-close-btn" onclick="app.closeCreateModal(event)" style="z-index: 10;">&times;</button>
+    <div class="form-section" style="padding: 0; border: none; box-shadow: none; margin: 0;">
+      <h2 style="margin-bottom: 1.5rem; padding-right: 40px;">Share Your Pin</h2>
+
+      <div class="success-message" id="success-msg">Your pin has been created successfully!</div>
+      <div class="alert alert-danger" id="error-msg"></div>
+
+      <form id="pin-form" onsubmit="app.createPin(event)">
+        <div class="form-group">
+          <label for="author">Your Name <span>(optional)</span></label>
+          <input type="text" id="author" placeholder="Enter your name">
+        </div>
+
+        <div class="form-group">
+          <label for="title">Pin Title</label>
+          <input type="text" id="title" placeholder="Give your pin a title" required>
+        </div>
+
+        <div class="form-group">
+          <label for="content">Your Story</label>
+          <textarea id="content" placeholder="Share your campus pin story in detail..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="location-name">Building / Location <span>(pin will appear here on map)</span></label>
+          <select id="location-name" required onchange="app.onLocationChange()">
+            <option value="">Select a building or location...</option>
+          </select>
+        </div>
+
+        <input type="hidden" id="location-lat">
+        <input type="hidden" id="location-lng">
+
+        <div class="form-group" id="location-preview" style="display: none;">
+          <label>Selected Location Preview</label>
+          <div id="mini-map"></div>
+          <p id="location-coords"></p>
+        </div>
+
+        <!-- Multiple Image Upload Section -->
+        <div class="form-group">
+          <label>Photos <span>(optional — add multiple photos)</span></label>
+          <div class="image-upload-area" id="image-upload-area"
+               ondragover="app.onDragOver(event)" 
+               ondragleave="app.onDragLeave(event)" 
+               ondrop="app.onDrop(event)">
+            <input type="file" id="pin-image" accept="image/*" multiple style="display:none;" onchange="app.onImageSelected(event)">
+            <div class="image-upload-placeholder" id="image-placeholder" onclick="document.getElementById('pin-image').click()">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <p>Click or drag & drop photos here</p>
+              <span>JPEG, PNG, WEBP up to 5MB each</span>
+            </div>
+            <div id="images-preview-grid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.75rem;"></div>
+          </div>
+
+          <div class="image-upload-progress" id="image-upload-progress" style="display:none;">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            <span id="progress-text">Uploading...</span>
+          </div>
+
+          <input type="hidden" id="image-urls" value="[]">
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="app.closeCreateModal()" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submit-btn" style="flex: 2;">Share Pin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Login Page -->
+<div id="page-admin" class="page">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo">Admin Portal</div>
+        <div class="auth-subtitle">Manage campus pins</div>
+      </div>
+      <div class="auth-body">
+        <div class="alert alert-danger" id="login-error"></div>
+
+        <form id="login-form" onsubmit="app.adminLogin(event)">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="admin@adnu.edu.ph" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter password" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="pin-modal-overlay" class="modal-overlay" onclick="app.closePinModal(event)">
+  <div class="pin-modal" onclick="event.stopPropagation()">
+    <button class="modal-close-btn" onclick="app.closePinModal(event)">&times;</button>
+    <div id="modal-pin-content"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API = 'http://127.0.0.1:5000/api';
+
+const CAMPUS_POLYGON = [
+  [13.629765159096044, 123.18293825625067],
+  [13.629222970170265, 123.18512962096604],
+  [13.6322076005151, 123.18640635245315],
+  [13.632809735342097, 123.18419353003817]
+];
+
+const ADNU_CENTER = [13.6310, 123.1845];
+
+const DEFAULT_ZOOM = 17;
+
+const CAMPUS_BOUNDS = [
+  [13.6285, 123.1822],
+  [13.6335, 123.1870]
+];
+
+const app = {
+  pins: [],
+  locations: [],
+  filteredPins: [],
+  token: localStorage.getItem('admin_token'),
+  map: null,
+  miniMap: null,
+  markers: [],
+  locationLabels: [],
+  campusPolygon: null,
+
+  async init() {
+    await this.loadLocations();
+    await this.loadPins();
+    this.populateLocationFilter();
+    this.initMap();
+    this.addMarkers();
+  },
+
+  initMap() {
+    this.map = L.map('campus-map', {
+      center: ADNU_CENTER,
+      zoom: DEFAULT_ZOOM,
+      maxBounds: CAMPUS_BOUNDS,
+      maxBoundsViscosity: 1.0,
+      minZoom: 16,
+      maxZoom: 19,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19,
+      maxNativeZoom: 19
+    }).addTo(this.map);
+
+    this.campusPolygon = L.polygon(CAMPUS_POLYGON, {
+      color: 'rgba(245,200,66,0.95)',
+      weight: 3,
+      fillColor: '#f5c842',
+      fillOpacity: 0.12,
+      dashArray: '10, 8'
+    }).addTo(this.map);
+
+    // Campus title label
+    L.marker([13.6324, 123.1845], {
+      icon: L.divIcon({
+        className: 'campus-label-container',
+        html: '<div class="campus-label">Ateneo de Naga University</div>',
+        iconSize: [220, 40],
+        iconAnchor: [110, 20]
+      }),
+      interactive: false,
+      zIndexOffset: -1000
+    }).addTo(this.map);
+
+    this.addLocationLabels();
+  },
+
+  addLocationLabels() {
+    this.locationLabels.forEach(label => this.map.removeLayer(label));
+    this.locationLabels = [];
+
+    this.locations.forEach(loc => {
+      if (!loc.latitude || !loc.longitude) return;
+
+      const label = L.marker([loc.latitude, loc.longitude], {
+        icon: L.divIcon({
+          className: 'location-label-container',
+          html: `<div class="location-label">${loc.location_name}</div>`,
+          iconSize: [140, 16],
+          iconAnchor: [70, 8]
+        }),
+        interactive: false,
+        zIndexOffset: -500
+      }).addTo(this.map);
+
+      this.locationLabels.push(label);
+    });
+  },
+
+  addMarkers() {
+    // Remove old markers
+    this.markers.forEach(marker => this.map.removeLayer(marker));
+    this.markers = [];
+
+    const pinsWithCoords = this.filteredPins.filter(pin => 
+      pin.latitude && pin.longitude && 
+      !isNaN(parseFloat(pin.latitude)) && !isNaN(parseFloat(pin.longitude))
+    );
+
+    console.log('Pins with coords:', pinsWithCoords.length, pinsWithCoords);
+
+    // Group by exact location
+    const locationGroups = {};
+    pinsWithCoords.forEach(pin => {
+      const key = `${parseFloat(pin.latitude).toFixed(6)},${parseFloat(pin.longitude).toFixed(6)}`;
+      if (!locationGroups[key]) locationGroups[key] = [];
+      locationGroups[key].push(pin);
+    });
+
+    pinsWithCoords.forEach((pin, index) => {
+      const lat = parseFloat(pin.latitude);
+      const lng = parseFloat(pin.longitude);
+      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const group = locationGroups[key];
+      const groupIndex = group.indexOf(pin);
+
+      // Spiral offset for overlapping pins
+      let offsetLat = 0;
+      let offsetLng = 0;
+
+      if (group.length > 1) {
+        const angle = (groupIndex / group.length) * 2 * Math.PI;
+        const radius = 0.00006 * (1 + Math.floor(groupIndex / 8));
+        offsetLat = Math.sin(angle) * radius;
+        offsetLng = Math.cos(angle) * radius;
+      }
+
+      const finalLat = lat + offsetLat;
+      const finalLng = lng + offsetLng;
+
+      const pinCount = group.length;
+      const pinIdBadge = `<div class="pin-id-badge">#${pin.pin_id}</div>`;
+
+      const icon = L.divIcon({
+        className: 'custom-pin-wrapper',
+        html: `
+          <div class="custom-pin-icon">
+            <div class="pin-pulse"></div>
+            <div class="pin-head"><i class="fas fa-map-pin"></i></div>
+            <div class="pin-point"></div>
+            ${pinIdBadge}
+          </div>
+        `,
+        iconSize: [36, 42],
+        iconAnchor: [18, 42],
+        popupAnchor: [0, -42]
+      });
+
+      const marker = L.marker([finalLat, finalLng], { icon })
+        .addTo(this.map)
+        .bindPopup(this.createPopupContent(pin, pinCount), {
+          closeButton: true,
+          closeOnClick: false
+        });
+
+      marker.pinId = pin.pin_id;
+      marker.trueLat = lat;
+      marker.trueLng = lng;
+      this.markers.push(marker);
+    });
+
+    // DO NOT auto-fit bounds — keeps map centered on campus
+    // Pins are visible at default zoom level
+    console.log('Total markers on map:', this.markers.length);
+  },
+
+  createPopupContent(pin, countAtLocation) {
+    const countText = countAtLocation > 1 ? `<span style="color:var(--gold);font-size:0.75rem;"> (${countAtLocation} pins here)</span>` : '';
+    return `
+      <div class="map-popup-title">${pin.title}${countText}</div>
+      <div class="map-popup-author">by ${pin.author || 'Anonymous'} &middot; ${new Date(pin.created_at).toLocaleDateString()}</div>
+      <div class="map-popup-story">${pin.content.substring(0, 120)}${pin.content.length > 120 ? '...' : ''}</div>
+      <div class="map-popup-badge">${pin.location_name || 'Campus'}</div>
+    `;
+  },
+
+  highlightPinOnMap(pinId) {
+    const marker = this.markers.find(m => m.pinId === pinId);
+    if (marker) {
+      this.map.flyTo([marker.trueLat, marker.trueLng], 19, {
+        duration: 1.2,
+        easeLinearity: 0.25
+      });
+      setTimeout(() => marker.openPopup(), 600);
+    }
+  },
+
+  onLocationChange() {
+    const select = document.getElementById('location-name');
+    const locationId = parseInt(select.value);
+
+    if (!locationId) {
+      document.getElementById('location-preview').style.display = 'none';
+      document.getElementById('location-lat').value = '';
+      document.getElementById('location-lng').value = '';
+      if (this.miniMap) {
+        this.miniMap.remove();
+        this.miniMap = null;
+      }
+      return;
+    }
+
+    const location = this.locations.find(l => l.location_id === locationId);
+    if (!location) return;
+
+    document.getElementById('location-lat').value = location.latitude || '';
+    document.getElementById('location-lng').value = location.longitude || '';
+
+    const previewDiv = document.getElementById('location-preview');
+    previewDiv.style.display = 'block';
+
+    const coordsText = document.getElementById('location-coords');
+
+    if (!location.latitude || !location.longitude) {
+      coordsText.innerHTML = `<span style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> No coordinates available</span>`;
+      document.getElementById('mini-map').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--gray-400);font-size:0.85rem;"><i class="fas fa-map-marker-alt" style="margin-right:8px;"></i>No map preview available</div>';
+      return;
+    }
+
+    coordsText.textContent = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+    this.initMiniMap(location.latitude, location.longitude, location.location_name);
+  },
+
+  initMiniMap(lat, lng, name) {
+    const container = document.getElementById('mini-map');
+    container.innerHTML = '';
+
+    this.miniMap = L.map('mini-map', {
+      center: [lat, lng],
+      zoom: 19,
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      maxNativeZoom: 19
+    }).addTo(this.miniMap);
+
+    L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: 'custom-pin-wrapper',
+        html: `
+          <div class="custom-pin-icon" style="transform:scale(0.75);">
+            <div class="pin-head"><i class="fas fa-map-pin"></i></div>
+            <div class="pin-point"></div>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28]
+      })
+    }).addTo(this.miniMap).bindPopup(name).openPopup();
+
+    L.polygon(CAMPUS_POLYGON, {
+      color: 'rgba(245,200,66,0.95)',
+      weight: 1,
+      fillColor: '#f5c842',
+      fillOpacity: 0.08,
+      dashArray: '5, 5'
+    }).addTo(this.miniMap);
+
+    this.miniMap.invalidateSize();
+  },
+
+  async loadLocations() {
+    try {
+      const res = await axios.get(`${API}/locations`);
+      this.locations = res.data;
+    } catch (err) {
+      console.error('Failed to load locations:', err);
+    }
+  },
+
+  async loadPins() {
+    try {
+      const res = await axios.get(`${API}/pins`);
+      this.pins = res.data;
+      this.filteredPins = [...this.pins];
+      this.renderPins();
+      this.updateStats();
+
+      if (this.map) {
+        this.addMarkers();
+      }
+    } catch (err) {
+      console.error('Failed to load pins:', err);
+      document.getElementById('pins-grid').innerHTML = '<div class="no-results"><i class="fas fa-exclamation-circle"></i><p>Failed to load pins. Make sure the server is running.</p></div>';
+    }
+  },
+
+  populateLocationFilter() {
+    const select = document.getElementById('location-name');
+    const filterSelect = document.getElementById('location-filter');
+
+    while (select.options.length > 1) select.remove(1);
+    while (filterSelect.options.length > 1) filterSelect.remove(1);
+
+    this.locations.forEach(loc => {
+      const option = document.createElement('option');
+      option.value = loc.location_id;
+      option.textContent = loc.location_name;
+      select.appendChild(option);
+
+      const filterOption = document.createElement('option');
+      filterOption.value = loc.location_id;
+      filterOption.textContent = loc.location_name;
+      filterSelect.appendChild(filterOption);
+    });
+  },
+
+  renderPins() {
+    const grid = document.getElementById('pins-grid');
+    if (!this.filteredPins.length) {
+      grid.innerHTML = '<div class="no-results"><i class="fas fa-inbox"></i><p>No pins found. Create the first pin!</p></div>';
+      return;
+    }
+    const bgClasses = ['bg-1', 'bg-2', 'bg-3', 'bg-4', 'bg-5', 'bg-6'];
+
+    grid.innerHTML = this.filteredPins.map((pin, index) => {
+      const bg = bgClasses[index % bgClasses.length];
+      const initials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      const hasImages = pin.image_urls && pin.image_urls.length > 0;
+      const firstImage = hasImages ? pin.image_urls[0] : null;
+      const imgStyle = hasImages ? `background-image: url('${firstImage}'); background-size: cover; background-position: center;` : '';
+      const imgCounter = hasImages && pin.image_urls.length > 1 ? `<div class="pin-img-counter">${pin.image_urls.length} photos</div>` : '';
+      const imgContent = hasImages 
+        ? '' 
+        : `<svg width="50" height="50" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+      return `
+      <div class="pin-card" onclick="app.openPinModal(${pin.pin_id})">
+        <div class="pin-img ${hasImages ? '' : bg}" style="${imgStyle}">
+          ${imgContent}
+          ${imgCounter}
+          <div class="pin-loc-badge">${pin.location_name || 'Campus'}</div>
+        </div>
+        <div class="pin-body">
+          <div class="pin-meta">
+            <div class="pin-avatar">${initials}</div>
+            <div class="pin-author">${pin.author || 'Anonymous'}</div>
+            <div class="pin-date">${new Date(pin.created_at).toLocaleDateString()}</div>
+          </div>
+          <div class="pin-title">${pin.title}</div>
+          <div class="pin-content">${pin.content}</div>
+        </div>
+        <div class="pin-footer">
+          <span class="category-tag tag-campus">Pin #${pin.pin_id}</span>
+        </div>
+      </div>
+    `;
+    }).join('');
+  },
+
+  openPinModal(pinId) {
+    const pin = this.pins.find(p => p.pin_id === pinId);
+    if (!pin) return;
+    this.highlightPinOnMap(pinId);
+    const overlay = document.getElementById('pin-modal-overlay');
+    const content = document.getElementById('modal-pin-content');
+    const hasImages = pin.image_urls && pin.image_urls.length > 0;
+    let imgSection = '';
+    if (hasImages) {
+      if (pin.image_urls.length === 1) {
+        imgSection = `<div class="modal-pin-image" onclick="app.openImageViewer('${pin.image_urls[0]}')" style="background-image: url('${pin.image_urls[0]}'); background-size: cover; background-position: center; height: 220px; border-radius: 14px; margin-bottom: 1.25rem; cursor: zoom-in; position: relative;"><div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; pointer-events:none;"><i class="fas fa-expand"></i> Click to expand</div></div>`;
+      } else {
+        imgSection = `
+          <div class="modal-image-carousel" style="display:flex; gap:0.5rem; overflow-x:auto; margin-bottom:1.25rem; padding-bottom:0.5rem;">
+            ${pin.image_urls.map((url, i) => `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background-image:url('${url}'); background-size:cover; background-position:center; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${pin.image_urls.length}</span></div>`).join('')}
+          </div>
+        `;
+      }
+    }
+    content.innerHTML = `
+      ${imgSection}
+      <div class="modal-pin-header">
+        <div>
+          <div class="pin-title" style="font-size:1.5rem;">${pin.title}</div>
+          <div class="pin-meta modal-meta" style="margin-top:0.5rem;">
+            <div class="pin-avatar">${(pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}</div>
+            <span>${pin.author || 'Anonymous'}</span>
+            <span>${new Date(pin.created_at).toLocaleDateString()}</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-pin-body">
+        <div class="pin-location"><i class="fas fa-location-dot"></i>${pin.location_name || 'Campus'}</div>
+        <p style="line-height:1.75; color:var(--gray-700); font-size:1rem; margin-top:0.75rem;">${pin.content}</p>
+      </div>
+    `;
+    overlay.classList.add('visible');
+  },
+
+  openImageViewer(imageUrl) {
+    const viewer = document.createElement('div');
+    viewer.id = 'image-viewer-overlay';
+    viewer.style.cssText = 'position:fixed; inset:0; background:rgba(12,22,44,0.92); z-index:100000; display:flex; align-items:center; justify-content:center; padding:2rem; cursor:zoom-out; animation: fadeIn 0.2s ease;';
+    viewer.innerHTML = `
+      <img src="${imageUrl}" style="max-width:100%; max-height:90vh; object-fit:contain; border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4); cursor:default;" onclick="event.stopPropagation()">
+      <button onclick="document.getElementById('image-viewer-overlay').remove(); event.stopPropagation();" style="position:absolute; top:20px; right:20px; width:44px; height:44px; border:none; border-radius:50%; background:rgba(255,255,255,0.15); color:#fff; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(10px);">&times;</button>
+    `;
+    viewer.onclick = () => viewer.remove();
+    document.addEventListener('keydown', function escClose(e) {
+      if (e.key === 'Escape') {
+        viewer.remove();
+        document.removeEventListener('keydown', escClose);
+      }
+    });
+    document.body.appendChild(viewer);
+  },
+
+  closePinModal(event) {
+    if (event) event.stopPropagation();
+    document.getElementById('pin-modal-overlay').classList.remove('visible');
+  },
+
+  filterPins() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    this.filteredPins = this.pins.filter(pin =>
+      !search ||
+      pin.title.toLowerCase().includes(search) ||
+      pin.content.toLowerCase().includes(search)
+    );
+    this.renderPins();
+    if (this.map) this.addMarkers();
+  },
+
+  filterByLocation() {
+    const locationId = document.getElementById('location-filter').value;
+    if (!locationId) {
+      this.filteredPins = [...this.pins];
+    } else {
+      this.filteredPins = this.pins.filter(pin => pin.location_id == locationId);
+    }
+    this.renderPins();
+    if (this.map) this.addMarkers();
+  },
+
+  updateStats() {
+    const statsDiv = document.getElementById('stats');
+    const pinsWithCoords = this.pins.filter(p => p.latitude && p.longitude).length;
+
+    statsDiv.innerHTML = `
+      <div class="stat-pill"><strong>${this.pins.length}</strong> total pins</div>
+      <div class="stat-pill"><strong>${this.locations.length}</strong> campus locations</div>
+      <div class="stat-pill"><strong>${pinsWithCoords}</strong> pinned on map</div>
+    `;
+  },
+
+  /* ── MULTIPLE IMAGE UPLOAD ── */
+  uploadedImages: [],
+
+  onImageSelected(event) {
+    const files = Array.from(event.target.files);
+    files.forEach(file => this.handleFile(file));
+    event.target.value = '';
+  },
+
+  handleFile(file) {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPEG, PNG, WEBP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB.');
+      return;
+    }
+
+    const tempId = 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.addImagePreview(tempId, e.target.result, null, true);
+    };
+    reader.readAsDataURL(file);
+    this.uploadImageToServer(file, tempId);
+  },
+
+  addImagePreview(id, src, url, isUploading) {
+    const grid = document.getElementById('images-preview-grid');
+    const placeholder = document.getElementById('image-placeholder');
+    placeholder.style.display = 'none';
+    grid.style.display = 'grid';
+
+    const div = document.createElement('div');
+    div.id = id;
+    div.style.cssText = 'position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; border: 2px solid var(--gray-200);';
+    div.innerHTML = `
+      <img src="${src}" style="width: 100%; height: 100%; object-fit: cover; ${isUploading ? 'opacity: 0.6;' : ''}">
+      ${isUploading ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><div style="width:20px; height:20px; border:2px solid var(--gold); border-top-color:transparent; border-radius:50%; animation: spin 1s linear infinite;"></div></div>' : ''}
+      <button type="button" onclick="app.removeImage('${id}')" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border:none; border-radius:50%; background:rgba(184,50,50,0.9); color:#fff; font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;"><i class="fas fa-times"></i></button>
+    `;
+    grid.appendChild(div);
+  },
+
+  async uploadImageToServer(file, tempId) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await axios.post(`${API}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const div = document.getElementById(tempId);
+      if (div) {
+        div.querySelector('img').style.opacity = '1';
+        const spinner = div.querySelector('div[style*="animation: spin"]');
+        if (spinner) spinner.remove();
+        div.dataset.url = res.data.url;
+      }
+
+      this.uploadedImages.push({ id: tempId, url: res.data.url });
+      this.updateImageUrlsInput();
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      this.removeImage(tempId);
+      alert('Failed to upload image. Please try again.');
+    }
+  },
+
+  removeImage(id) {
+    const div = document.getElementById(id);
+    if (div) div.remove();
+
+    this.uploadedImages = this.uploadedImages.filter(img => img.id !== id);
+    this.updateImageUrlsInput();
+
+    const grid = document.getElementById('images-preview-grid');
+    if (this.uploadedImages.length === 0) {
+      grid.style.display = 'none';
+      document.getElementById('image-placeholder').style.display = 'flex';
+    }
+  },
+
+  updateImageUrlsInput() {
+    const urls = this.uploadedImages.map(img => img.url);
+    document.getElementById('image-urls').value = JSON.stringify(urls);
+  },
+
+  clearAllImages() {
+    document.getElementById('images-preview-grid').innerHTML = '';
+    document.getElementById('images-preview-grid').style.display = 'none';
+    document.getElementById('image-placeholder').style.display = 'flex';
+    this.uploadedImages = [];
+    this.updateImageUrlsInput();
+  },
+
+  onDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('image-upload-area').classList.add('drag-over');
+  },
+
+  onDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('image-upload-area').classList.remove('drag-over');
+  },
+
+  onDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('image-upload-area').classList.remove('drag-over');
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+      Array.from(files).forEach(file => this.handleFile(file));
+    }
+  },
+
+  openCreateModal() {
+    document.getElementById('create-pin-overlay').classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  },
+
+  closeCreateModal(event) {
+    if (event && event.target !== document.getElementById('create-pin-overlay') && event.target !== event.currentTarget) return;
+    document.getElementById('create-pin-overlay').classList.remove('visible');
+    document.body.style.overflow = '';
+    document.getElementById('pin-form').reset();
+    document.getElementById('error-msg').classList.remove('show');
+    document.getElementById('success-msg').classList.remove('show');
+    document.getElementById('location-preview').style.display = 'none';
+    document.getElementById('location-lat').value = '';
+    document.getElementById('location-lng').value = '';
+    this.clearAllImages();
+    if (this.miniMap) {
+      this.miniMap.remove();
+      this.miniMap = null;
+    }
+  },
+
+  async createPin(event) {
+    event.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    btn.classList.add('loading');
+
+    try {
+      const locationSelect = document.getElementById('location-name');
+      const locationId = parseInt(locationSelect.value);
+      const selectedLocation = this.locations.find(l => l.location_id === locationId);
+
+      if (!selectedLocation) {
+        throw new Error('Please select a valid location');
+      }
+
+      const lat = parseFloat(document.getElementById('location-lat').value) || selectedLocation?.latitude;
+      const lng = parseFloat(document.getElementById('location-lng').value) || selectedLocation?.longitude;
+
+      if (!lat || !lng) {
+        throw new Error('Selected location has no coordinates.');
+      }
+
+      const author = document.getElementById('author').value.trim();
+      const imageUrlsJson = document.getElementById('image-urls').value;
+      const imageUrls = imageUrlsJson ? JSON.parse(imageUrlsJson) : [];
+      const data = {
+        author: author,
+        title: document.getElementById('title').value,
+        content: document.getElementById('content').value,
+        location_id: locationId,
+        location_name: selectedLocation.location_name,
+        latitude: lat,
+        longitude: lng,
+        visibility: 'public',
+        image_urls: imageUrls
+      };
+
+      await axios.post(`${API}/pins`, data);
+      document.getElementById('success-msg').classList.add('show');
+
+      setTimeout(() => {
+        document.getElementById('success-msg').classList.remove('show');
+        this.closeCreateModal();
+        this.loadPins();
+      }, 1500);
+    } catch (err) {
+      document.getElementById('error-msg').textContent = 'Failed to create pin: ' + (err.response?.data?.error || err.message);
+      document.getElementById('error-msg').classList.add('show');
+    } finally {
+      btn.classList.remove('loading');
+    }
+  },
+
+  async adminLogin(event) {
+    event.preventDefault();
+    const btn = document.getElementById('login-btn');
+    btn.classList.add('loading');
+
+    try {
+      const res = await axios.post(`${API}/auth/login`, {
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      });
+
+      localStorage.setItem('admin_token', res.data.access_token);
+      this.token = res.data.access_token;
+      document.getElementById('login-error').classList.remove('show');
+
+      this.showAdminPanel();
+    } catch (err) {
+      document.getElementById('login-error').textContent = err.response?.data?.error || 'Login failed';
+      document.getElementById('login-error').classList.add('show');
+    } finally {
+      btn.classList.remove('loading');
+    }
+  },
+
+  showAdminPanel() {
+    alert('Admin logged in! Full admin panel with edit/delete capabilities coming soon.');
+    this.showPage('explore');
+  },
+
+  showPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`page-${page}`).classList.add('active');
+    const button = document.querySelector(`button[onclick="app.showPage('${page}')"]`);
+    if (button) button.classList.add('active');
+
+    if (page === 'explore') {
+      this.loadPins();
+      setTimeout(() => {
+        if (this.map) this.map.invalidateSize();
+      }, 100);
+    }
+  }
+};
+
+window.addEventListener('load', () => app.init());
+</script>
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdNU Mosaic Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+body { background: #eef2f7; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem 2rem; flex-wrap: wrap; }
+.admin-header h1 { font-size: 2rem; margin:0; }
+.admin-dashboard { padding: 0 2rem 2rem; }
+.admin-panels { display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr); }
+.admin-panel { background: #fff; border-radius: 24px; padding: 1.5rem; box-shadow: 0 24px 55px rgba(19,32,68,0.08); border: 1px solid rgba(31, 46, 78, 0.05); }
+.panel-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.panel-title h2 { margin:0; font-size:1.2rem; }
+.stat-grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); margin-bottom:1.5rem; }
+.stat-card { background:#1a2e5a; color:#fff; border-radius:18px; padding:1rem 1.25rem; min-height:100px; display:flex; flex-direction:column; justify-content:space-between; }
+.stat-card span { color:rgba(255,255,255,0.72); font-size:.8rem; }
+.stat-value { font-size:1.7rem; font-weight:700; line-height:1; }
+.table-wrap { overflow-x:auto; }
+.admin-table { width:100%; border-collapse:collapse; min-width:760px; }
+.admin-table th, .admin-table td { text-align:left; padding:.95rem 1rem; border-bottom:1px solid #ececf0; }
+.admin-table th { color:#5a6070; font-size:.82rem; text-transform:uppercase; letter-spacing:.08em; }
+.admin-table tbody tr:hover { background:#fbfbfe; }
+.badge { display:inline-flex; align-items:center; gap:.3rem; padding:.35rem .65rem; border-radius:999px; font-size:.78rem; font-weight:600; }
+.badge-public { background:#e8f6ed; color:#1a7a4a; }
+.badge-private { background:#f4ebff; color:#7a46cb; }
+.action-btn { border:none; background:#1a2e5a; color:#fff; border-radius:12px; padding:.6rem .9rem; cursor:pointer; transition:transform .15s ease, background .15s ease; }
+.action-btn:hover { transform:translateY(-1px); background:#15264d; }
+.action-link { color:#1a2e5a; font-weight:600; cursor:pointer; text-decoration:underline; background:none; border:none; padding:0; }
+.form-grid { display:grid; gap:1rem; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); }
+.form-card { background:#f8f8fb; border-radius:18px; padding:1rem; }
+.form-card h3 { margin:0 0 1rem; font-size:1rem; }
+.form-row { margin-bottom:1rem; }
+.form-row label { display:block; font-size:.78rem; margin-bottom:.35rem; color:#5d647c; }
+.form-row input, .form-row textarea, .form-row select { width:100%; border:1px solid #d1d3dd; border-radius:12px; padding:.9rem 1rem; background:#fff; font-size:.95rem; }
+.admin-alert { display:none; margin-bottom:1rem; padding:1rem 1.2rem; border-radius:14px; border:1px solid transparent; }
+.admin-alert.show { display:block; }
+.admin-alert.success { background:#ecf8f0; border-color:#b1e5c2; color:#1f6f43; }
+.admin-alert.error { background:#fff1f0; border-color:#f2c1c0; color:#9d2d2d; }
+.hidden { display:none !important; }
+.modal-overlay { position:fixed; inset:0; background:rgba(10,20,40,0.7); display:none; align-items:center; justify-content:center; padding:1.5rem; z-index:2000; }
+.modal-overlay.visible { display:flex; }
+.modal-card { background:#fff; border-radius:24px; width:100%; max-width:920px; max-height:90vh; overflow:auto; padding:1.5rem; box-shadow:0 45px 100px rgba(15,26,56,0.18); }
+.modal-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+.modal-head h3 { margin:0; }
+.close-btn { border:none; background:#e7eaf2; color:#2d3d59; border-radius:12px; width:42px; height:42px; font-size:1.35rem; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="loading-overlay" id="loader">
+  <div class="loading-logo">AdNU <span>Mosaic</span></div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <div class="loading-text">Admin Dashboard</div>
+</div>
+
+<div class="auth-page active" id="login-screen">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="auth-logo-circle">A</div>
+      <div>
+        <div class="auth-title">Admin Portal</div>
+        <div class="auth-subtitle">Secure campus pin management</div>
+      </div>
+    </div>
+    <div class="auth-body">
+      <div id="login-alert" class="admin-alert"></div>
+      <form id="login-form" onsubmit="loginAdmin(event)">
+        <div class="form-group">
+          <label for="login-username">Email or Username</label>
+          <input id="login-username" type="text" placeholder="admin or admin@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input id="login-password" type="password" placeholder="••••••••" required>
+        </div>
+        <button class="action-btn" type="submit" style="width:100%;">Sign In</button>
+      </form>
+      <p style="margin-top:1rem; font-size:.9rem; color:#5c5f79;">Use admin credentials to manage pins, locations, and analytics.</p>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="dashboard-screen">
+  <div class="admin-header">
+    <div>
+      <h1>AdNU Mosaic Admin</h1>
+      <p style="color:#5d647c; margin-top:.4rem;">Manage campus pins, locations, and analytics from one page.</p>
+    </div>
+    <button class="action-btn" onclick="logoutAdmin()">Sign Out</button>
+  </div>
+  <div class="admin-dashboard">
+    <div id="dashboard-alert" class="admin-alert"></div>
+    <div class="stat-grid" id="stats-grid"></div>
+    <div class="admin-panels">
+      <div class="admin-panel">
+        <div class="panel-title">
+          <h2>Pin Management</h2>
+          <button class="action-btn" onclick="openPinForm()">New Pin</button>
+        </div>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr><th>ID</th><th>Title</th><th>Author</th><th>Location</th><th>Visibility</th><th>Created</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="pins-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-panel">
+        <div class="panel-title"><h2>Location Management</h2></div>
+        <div id="locations-list" style="margin-bottom:1.25rem;"></div>
+        <div class="form-card">
+          <h3>Add new location</h3>
+          <form id="location-form" onsubmit="createLocation(event)">
+            <div class="form-row"><label for="location-name">Location name</label><input id="location-name" type="text" required></div>
+            <div class="form-grid">
+              <div class="form-row"><label for="location-lat">Latitude</label><input id="location-lat" type="number" step="any"></div>
+              <div class="form-row"><label for="location-lng">Longitude</label><input id="location-lng" type="number" step="any"></div>
+            </div>
+            <div class="form-row"><label for="location-desc">Description</label><textarea id="location-desc" rows="3"></textarea></div>
+            <button class="action-btn" type="submit">Create Location</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pin-modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="pin-modal-title">New Pin</h3>
+      <button class="close-btn" type="button" onclick="closePinForm()">×</button>
+    </div>
+    <div id="pin-modal-alert" class="admin-alert"></div>
+    <form id="pin-form" onsubmit="savePin(event)">
+      <div class="form-grid">
+        <div class="form-row"><label for="pin-title">Title</label><input id="pin-title" type="text" required></div>
+        <div class="form-row"><label for="pin-author">Author</label><input id="pin-author" type="text" required></div>
+        <div class="form-row"><label for="pin-visibility">Visibility</label><select id="pin-visibility"><option value="public">Public</option><option value="private">Private</option></select></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row"><label for="pin-location">Location</label><select id="pin-location"></select></div>
+        <div class="form-row"><label for="pin-category">Category</label><input id="pin-category" type="text" placeholder="campus"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-row"><label for="pin-lat">Latitude</label><input id="pin-lat" type="number" step="any"></div>
+        <div class="form-row"><label for="pin-lng">Longitude</label><input id="pin-lng" type="number" step="any"></div>
+      </div>
+      <div class="form-row"><label for="pin-content">Story / Content</label><textarea id="pin-content" rows="4" required></textarea></div>
+      <div class="form-row"><label for="pin-images">Image URLs (comma separated)</label><textarea id="pin-images" rows="3" placeholder="/uploads/image1.jpg, /uploads/image2.jpg"></textarea></div>
+      <div class="form-row"><label for="pin-location-name">Location display name</label><input id="pin-location-name" type="text" placeholder="Campus"></div>
+      <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem;"><button class="action-btn" type="submit">Save Pin</button><button class="action-btn" type="button" style="background:#e7eaf2; color:#2d3d59;" onclick="closePinForm()">Cancel</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:5000';
+let adminPins = [];
+let locations = [];
+let editingPinId = null;
+
+function authHeader() {
+  const token = localStorage.getItem('auth_token');
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+function showAlert(id, message, type = 'success') {
+  const el = document.getElementById(id);
+  el.className = `admin-alert show ${type}`;
+  el.textContent = message;
+}
+
+function hideAlert(id) {
+  const el = document.getElementById(id);
+  el.className = 'admin-alert';
+  el.textContent = '';
+}
+
+async function request(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...authHeader(), ...(options.headers || {}) };
+  const res = await fetch(API + path, { ...options, headers });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || res.statusText || 'Request failed');
+  return body;
+}
+
+function showScreen(screenId) {
+  document.querySelectorAll('.page, .auth-page').forEach(el => el.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+}
+
+async function loginAdmin(event) {
+  event.preventDefault();
+  hideAlert('login-alert');
+
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+
+  try {
+    const data = await request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+    localStorage.setItem('auth_token', data.access_token);
+    await loadDashboard();
+  } catch (err) {
+    showAlert('login-alert', err.message || 'Login failed', 'error');
+  }
+}
+
+function logoutAdmin() {
+  localStorage.removeItem('auth_token');
+  editingPinId = null;
+  document.getElementById('pin-form').reset();
+  showScreen('login-screen');
+}
+
+async function loadDashboard() {
+  try {
+    await request('/api/auth/me');
+    await Promise.all([loadStats(), loadLocations(), loadAdminPins()]);
+    showScreen('dashboard-screen');
+  } catch (err) {
+    logoutAdmin();
+    showAlert('login-alert', 'Session expired. Please sign in again.', 'error');
+  }
+}
+
+async function loadStats() {
+  try {
+    const stats = await request('/api/stats');
+    const grid = document.getElementById('stats-grid');
+    grid.innerHTML = `
+      <div class="stat-card"><span>Total pins</span><div class="stat-value">${stats.total_pins}</div></div>
+      <div class="stat-card"><span>Public pins</span><div class="stat-value">${stats.public_pins}</div></div>
+      <div class="stat-card"><span>Locations</span><div class="stat-value">${stats.locations}</div></div>
+    `;
+  } catch (err) {
+    showAlert('dashboard-alert', 'Unable to load stats.', 'error');
+  }
+}
+
+async function loadLocations() {
+  try {
+    const data = await request('/api/locations');
+    locations = data;
+    const list = document.getElementById('locations-list');
+    list.innerHTML = data.map(loc => `<div style="padding:.9rem 1rem; border:1px solid #e5e7ef; border-radius:16px; margin-bottom:.85rem;"><strong>${loc.location_name}</strong><div style="color:#5b627a; margin:.4rem 0;">${loc.description || 'No description provided.'}</div><div style="font-size:.82rem; color:#7d8392;">Lat: ${loc.latitude || '—'} · Lng: ${loc.longitude || '—'}</div></div>`).join('') || '<em style="color:#6f7287;">No locations available yet.</em>';
+    const select = document.getElementById('pin-location');
+    select.innerHTML = '<option value="">Choose location</option>' + data.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
+  } catch (err) {
+    showAlert('dashboard-alert', 'Unable to load locations.', 'error');
+  }
+}
+
+async function loadAdminPins() {
+  try {
+    const data = await request('/api/admin/pins');
+    adminPins = data;
+    const body = document.getElementById('pins-table');
+    body.innerHTML = data.map(pin => {
+      const badgeClass = pin.visibility === 'private' ? 'badge-private' : 'badge-public';
+      return `<tr>
+        <td>${pin.pin_id}</td>
+        <td>${pin.title || '—'}</td>
+        <td>${pin.author || 'Anonymous'}</td>
+        <td>${pin.location_name || 'Campus'}</td>
+        <td><span class="badge ${badgeClass}">${pin.visibility || 'public'}</span></td>
+        <td>${pin.created_at ? pin.created_at.slice(0, 10) : '—'}</td>
+        <td style="white-space:nowrap;">
+          <button class="action-link" onclick="openPinForm(${pin.pin_id})">Edit</button>
+          <button class="action-link" onclick="deletePin(${pin.pin_id})" style="color:#bb2f2f;">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    showAlert('dashboard-alert', 'Cannot load pins.', 'error');
+  }
+}
+
+function openPinForm(pinId = null) {
+  hideAlert('pin-modal-alert');
+  editingPinId = pinId;
+  document.getElementById('pin-form').reset();
+  document.getElementById('pin-modal-title').textContent = pinId ? 'Edit Pin' : 'New Pin';
+
+  if (pinId) {
+    const pin = adminPins.find(item => item.pin_id === pinId);
+    if (!pin) return;
+    document.getElementById('pin-title').value = pin.title || '';
+    document.getElementById('pin-author').value = pin.author || '';
+    document.getElementById('pin-visibility').value = pin.visibility || 'public';
+    document.getElementById('pin-category').value = pin.category || '';
+    document.getElementById('pin-location-name').value = pin.location_name || '';
+    document.getElementById('pin-lat').value = pin.latitude || '';
+    document.getElementById('pin-lng').value = pin.longitude || '';
+    document.getElementById('pin-content').value = pin.content || '';
+    document.getElementById('pin-images').value = pin.image_urls ? pin.image_urls.join(', ') : (pin.image_url || '');
+    document.getElementById('pin-location').value = pin.location_id || '';
+  }
+
+  document.getElementById('pin-modal').classList.add('visible');
+}
+
+function closePinForm() {
+  document.getElementById('pin-modal').classList.remove('visible');
+  editingPinId = null;
+}
+
+async function savePin(event) {
+  event.preventDefault();
+  hideAlert('pin-modal-alert');
+
+  const payload = {
+    title: document.getElementById('pin-title').value.trim(),
+    author: document.getElementById('pin-author').value.trim(),
+    visibility: document.getElementById('pin-visibility').value,
+    category: document.getElementById('pin-category').value.trim() || 'campus',
+    location_id: document.getElementById('pin-location').value || null,
+    location_name: document.getElementById('pin-location-name').value.trim() || 'Campus',
+    latitude: document.getElementById('pin-lat').value || null,
+    longitude: document.getElementById('pin-lng').value || null,
+    content: document.getElementById('pin-content').value.trim(),
+    image_urls: document.getElementById('pin-images').value.split(',').map(url => url.trim()).filter(Boolean),
+  };
+
+  try {
+    if (editingPinId) {
+      await request(`/api/pins/${editingPinId}`, { method: 'PUT', body: JSON.stringify(payload) });
+      showAlert('dashboard-alert', 'Pin updated successfully.');
+    } else {
+      await request('/api/pins', { method: 'POST', body: JSON.stringify(payload) });
+      showAlert('dashboard-alert', 'Pin created successfully.');
+    }
+    closePinForm();
+    await loadAdminPins();
+  } catch (err) {
+    showAlert('pin-modal-alert', err.message || 'Unable to save pin', 'error');
+  }
+}
+
+async function deletePin(pinId) {
+  if (!confirm('Delete this pin permanently?')) return;
+  try {
+    await request(`/api/pins/${pinId}`, { method: 'DELETE' });
+    showAlert('dashboard-alert', 'Pin deleted successfully.');
+    await loadAdminPins();
+  } catch (err) {
+    showAlert('dashboard-alert', err.message || 'Unable to delete pin', 'error');
+  }
+}
+
+async function createLocation(event) {
+  event.preventDefault();
+  hideAlert('dashboard-alert');
+
+  const payload = {
+    location_name: document.getElementById('location-name').value.trim(),
+    latitude: document.getElementById('location-lat').value || null,
+    longitude: document.getElementById('location-lng').value || null,
+    description: document.getElementById('location-desc').value.trim()
+  };
+
+  try {
+    await request('/api/locations', { method: 'POST', body: JSON.stringify(payload) });
+    showAlert('dashboard-alert', 'Location created successfully.');
+    document.getElementById('location-form').reset();
+    await loadLocations();
+  } catch (err) {
+    showAlert('dashboard-alert', err.message || 'Unable to create location', 'error');
+  }
+}
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+    setTimeout(() => document.getElementById('loader').remove(), 300);
+  }, 800);
+
+  if (localStorage.getItem('auth_token')) {
+    loadDashboard();
+  } else {
+    showScreen('login-screen');
+  }
+});
+</script>
+</body>
+</html>
