@@ -651,6 +651,7 @@ def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/')
+@app.route('/adnu-mosaic.html')
 def home():
     try:
         return send_from_directory(frontend_path, 'adnu-mosaic.html')
@@ -659,6 +660,7 @@ def home():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/admin')
+@app.route('/admin.html')
 def admin_page():
     try:
         return send_from_directory(frontend_path, 'admin.html')
@@ -667,6 +669,7 @@ def admin_page():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/map')
+@app.route('/adnu-mosaic-react.html')
 def map_page():
     try:
         return send_from_directory(frontend_path, 'adnu-mosaic-react.html')
