@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql --version)",
+      "PowerShell(Get-Command mysql -ErrorAction SilentlyContinue)",
+      "PowerShell($env:PYTHONUNBUFFERED=1; cd \"C:\\\\Users\\\\boshe\\\\OneDrive\\\\Documents\\\\PROJECTS\\\\MOSAIC\\\\backend\"; .\\\\venv\\\\Scripts\\\\activate.ps1; python app.py 2>&1)",
+      "PowerShell(winget search mysql)",
+      "PowerShell(winget install Oracle.MySQL -e)",
+      "Bash(python backend/app.py)",
+      "PowerShell(Start-Sleep -Seconds 3; try { $response = Invoke-WebRequest -Uri \"http://localhost:5000/\" -TimeoutSec 5; Write-Host \"✓ App is working!\"; Write-Host \"Status: $\\($response.StatusCode\\)\"; Write-Host \"Content length: $\\($response.Content.Length\\) bytes\" } catch { Write-Host \"✗ Error: $\\($_.Exception.Response.StatusCode\\)\" })",
+      "Bash(netstat -ano)",
+      "Bash(findstr :5000)",
+      "PowerShell(Get-Process python)",
+      "PowerShell(Stop-Process -Force 2>$null)",
+      "Bash(findstr \":5001\")",
+      "Bash(curl -s -X POST http://127.0.0.1:5001/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin_osa\",\"password\":\"test\"}')",
+      "Bash(ConvertFrom-Json)",
+      "Bash(find \"c:\\\\Users\\\\boshe\\\\OneDrive\\\\Documents\\\\PROJECTS\\\\FindIT\" -name \"database.py\" -o -name \"init*.sql\" -o -name \"schema*.sql\")",
+      "Read(//c/Users/boshe/OneDrive/Documents/PROJECTS/FindIT/**)",
+      "Bash(curl -s -X POST http://127.0.0.1:5001/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"admin_osa\",\"password\":\"admin123\"}')",
+      "Read(//c/Users/boshe/OneDrive/Documents/PROJECTS/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\boshe\\OneDrive\\Documents\\PROJECTS\\FindIT\\frotnend\\public",
+      "c:\\Users\\boshe\\OneDrive\\Documents\\PROJECTS\\FindIT\\frotnend\\dist"
+    ]
+  }
+}

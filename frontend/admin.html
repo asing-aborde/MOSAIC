@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="/static/style.css">
 <style>
 body { background: #eef2f7; }
 .admin-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem 2rem; flex-wrap: wrap; }
@@ -69,16 +69,19 @@ body { background: #eef2f7; }
       <div id="login-alert" class="admin-alert"></div>
       <form id="login-form" onsubmit="loginAdmin(event)">
         <div class="form-group">
-          <label for="login-username">Email or Username</label>
-          <input id="login-username" type="text" placeholder="admin or admin@example.com" required>
+          <label for="login-username">Username</label>
+          <input id="login-username" type="text" placeholder="admin" required>
         </div>
         <div class="form-group">
           <label for="login-password">Password</label>
           <input id="login-password" type="password" placeholder="••••••••" required>
         </div>
-        <button class="action-btn" type="submit" style="width:100%;">Sign In</button>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+          <button class="action-btn" type="submit" style="flex:1;">Sign In</button>
+          <button class="action-btn" type="button" style="background:#e7eaf2; color:#2d3d59;" onclick="cancelLogin()">Cancel</button>
+        </div>
       </form>
-      <p style="margin-top:1rem; font-size:.9rem; color:#5c5f79;">Use admin credentials to manage pins, locations, and analytics.</p>
+      <p style="margin-top:1rem; font-size:.9rem; color:#5c5f79;">Default: admin / admin123</p>
     </div>
   </div>
 </div>
@@ -117,10 +120,9 @@ body { background: #eef2f7; }
           <h3>Add new location</h3>
           <form id="location-form" onsubmit="createLocation(event)">
             <div class="form-row"><label for="location-name">Location name</label><input id="location-name" type="text" required></div>
-            <div class="form-grid">
-              <div class="form-row"><label for="location-lat">Latitude</label><input id="location-lat" type="number" step="any"></div>
-              <div class="form-row"><label for="location-lng">Longitude</label><input id="location-lng" type="number" step="any"></div>
-            </div>
+            <div class="form-row"><label for="location-coords">Coordinates (from Google Maps)</label><input id="location-coords" type="text" placeholder="13.630417960557628, 123.18511644021976" onchange="parseCoordinates('location')"></div>
+            <input id="location-lat" type="hidden">
+            <input id="location-lng" type="hidden">
             <div class="form-row"><label for="location-desc">Description</label><textarea id="location-desc" rows="3"></textarea></div>
             <button class="action-btn" type="submit">Create Location</button>
           </form>
@@ -147,10 +149,9 @@ body { background: #eef2f7; }
         <div class="form-row"><label for="pin-location">Location</label><select id="pin-location"></select></div>
         <div class="form-row"><label for="pin-category">Category</label><input id="pin-category" type="text" placeholder="campus"></div>
       </div>
-      <div class="form-grid">
-        <div class="form-row"><label for="pin-lat">Latitude</label><input id="pin-lat" type="number" step="any"></div>
-        <div class="form-row"><label for="pin-lng">Longitude</label><input id="pin-lng" type="number" step="any"></div>
-      </div>
+      <div class="form-row"><label for="pin-coords">Coordinates (from Google Maps)</label><input id="pin-coords" type="text" placeholder="13.630417960557628, 123.18511644021976" onchange="parseCoordinates('pin')"></div>
+      <input id="pin-lat" type="hidden">
+      <input id="pin-lng" type="hidden">
       <div class="form-row"><label for="pin-content">Story / Content</label><textarea id="pin-content" rows="4" required></textarea></div>
       <div class="form-row"><label for="pin-images">Image URLs (comma separated)</label><textarea id="pin-images" rows="3" placeholder="/uploads/image1.jpg, /uploads/image2.jpg"></textarea></div>
       <div class="form-row"><label for="pin-location-name">Location display name</label><input id="pin-location-name" type="text" placeholder="Campus"></div>
@@ -164,6 +165,30 @@ const API = 'http://127.0.0.1:5000';
 let adminPins = [];
 let locations = [];
 let editingPinId = null;
+
+function parseCoordinates(type) {
+  const coordsInput = document.getElementById(`${type}-coords`);
+  const coordsText = coordsInput.value.trim();
+
+  if (!coordsText) return;
+
+  const parts = coordsText.split(',').map(p => p.trim());
+  if (parts.length !== 2) {
+    alert('Please enter coordinates in format: latitude, longitude');
+    return;
+  }
+
+  const lat = parseFloat(parts[0]);
+  const lng = parseFloat(parts[1]);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    alert('Invalid coordinates. Please enter valid numbers.');
+    return;
+  }
+
+  document.getElementById(`${type}-lat`).value = lat;
+  document.getElementById(`${type}-lng`).value = lng;
+}
 
 function authHeader() {
   const token = localStorage.getItem('auth_token');
@@ -214,11 +239,16 @@ async function loginAdmin(event) {
   }
 }
 
+function cancelLogin() {
+  document.getElementById('login-form').reset();
+  window.location.href = '/adnu-mosaic-react.html';
+}
+
 function logoutAdmin() {
   localStorage.removeItem('auth_token');
   editingPinId = null;
   document.getElementById('pin-form').reset();
-  showScreen('login-screen');
+  window.location.href = '/adnu-mosaic-react.html';
 }
 
 async function loadDashboard() {
@@ -251,7 +281,19 @@ async function loadLocations() {
     const data = await request('/api/locations');
     locations = data;
     const list = document.getElementById('locations-list');
-    list.innerHTML = data.map(loc => `<div style="padding:.9rem 1rem; border:1px solid #e5e7ef; border-radius:16px; margin-bottom:.85rem;"><strong>${loc.location_name}</strong><div style="color:#5b627a; margin:.4rem 0;">${loc.description || 'No description provided.'}</div><div style="font-size:.82rem; color:#7d8392;">Lat: ${loc.latitude || '—'} · Lng: ${loc.longitude || '—'}</div></div>`).join('') || '<em style="color:#6f7287;">No locations available yet.</em>';
+    list.innerHTML = data.map(loc => `
+      <div style="padding:.9rem 1rem; border:1px solid #e5e7ef; border-radius:16px; margin-bottom:.85rem; display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+        <div style="flex:1;">
+          <strong>${loc.location_name}</strong>
+          <div style="color:#5b627a; margin:.4rem 0; font-size:.9rem;">${loc.description || 'No description'}</div>
+          <div style="font-size:.82rem; color:#7d8392;">Lat: ${loc.latitude || '—'} · Lng: ${loc.longitude || '—'}</div>
+        </div>
+        <div style="display:flex; gap:.5rem; white-space:nowrap;">
+          <button class="action-link" onclick="editLocation(${loc.location_id})">Edit</button>
+          <button class="action-link" onclick="deleteLocation(${loc.location_id})" style="color:#bb2f2f;">Delete</button>
+        </div>
+      </div>
+    `).join('') || '<em style="color:#6f7287;">No locations available yet.</em>';
     const select = document.getElementById('pin-location');
     select.innerHTML = '<option value="">Choose location</option>' + data.map(loc => `<option value="${loc.location_id}">${loc.location_name}</option>`).join('');
   } catch (err) {
@@ -368,20 +410,63 @@ async function createLocation(event) {
   };
 
   try {
-    await request('/api/locations', { method: 'POST', body: JSON.stringify(payload) });
-    showAlert('dashboard-alert', 'Location created successfully.');
+    if (editingLocationId) {
+      await request(`/api/locations/${editingLocationId}`, { method: 'PUT', body: JSON.stringify(payload) });
+      showAlert('dashboard-alert', 'Location updated successfully.');
+      editingLocationId = null;
+      document.querySelector('#location-form button').textContent = 'Create Location';
+    } else {
+      await request('/api/locations', { method: 'POST', body: JSON.stringify(payload) });
+      showAlert('dashboard-alert', 'Location created successfully.');
+    }
     document.getElementById('location-form').reset();
     await loadLocations();
   } catch (err) {
-    showAlert('dashboard-alert', err.message || 'Unable to create location', 'error');
+    showAlert('dashboard-alert', err.message || 'Unable to save location', 'error');
+  }
+}
+
+let editingLocationId = null;
+
+function editLocation(locationId) {
+  const location = locations.find(l => l.location_id === locationId);
+  if (!location) return;
+
+  editingLocationId = locationId;
+  document.getElementById('location-name').value = location.location_name;
+  document.getElementById('location-coords').value = `${location.latitude || ''}, ${location.longitude || ''}`.trim();
+  document.getElementById('location-coords').onchange();
+  document.getElementById('location-desc').value = location.description || '';
+
+  const btn = document.querySelector('#location-form button');
+  btn.textContent = 'Update Location';
+  btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function deleteLocation(locationId) {
+  if (!confirm('Delete this location permanently? Any pins at this location will keep their coordinates.')) return;
+
+  try {
+    await request(`/api/locations/${locationId}`, { method: 'DELETE' });
+    showAlert('dashboard-alert', 'Location deleted successfully.');
+    await loadLocations();
+  } catch (err) {
+    showAlert('dashboard-alert', err.message || 'Unable to delete location', 'error');
   }
 }
 
 window.addEventListener('load', () => {
-  setTimeout(() => {
+  const isFirstLoad = !sessionStorage.getItem('admin_visited');
+  if (isFirstLoad) {
+    sessionStorage.setItem('admin_visited', 'true');
+    setTimeout(() => {
+      document.getElementById('loader').classList.add('hidden');
+      setTimeout(() => document.getElementById('loader').remove(), 300);
+    }, 800);
+  } else {
     document.getElementById('loader').classList.add('hidden');
-    setTimeout(() => document.getElementById('loader').remove(), 300);
-  }, 800);
+    document.getElementById('loader').remove();
+  }
 
   if (localStorage.getItem('auth_token')) {
     loadDashboard();
