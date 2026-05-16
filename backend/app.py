@@ -17,7 +17,7 @@ UPLOAD_FOLDER = os.path.join(frontend_path, 'uploads')
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-app = Flask(__name__, static_folder=frontend_path, static_url_path='')
+app = Flask(__name__, static_folder=frontend_path, static_url_path='/static')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 bcrypt = Bcrypt(app)
 
@@ -101,7 +101,8 @@ def upload_image():
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(file_path)
 
-    return jsonify({'url': f'/uploads/{filename}'}), 201
+    base_url = request.host_url.rstrip('/')
+    return jsonify({'url': f'{base_url}/uploads/{filename}'}), 201
 
 # ==================== AUTHENTICATION ENDPOINTS ====================
 
@@ -546,6 +547,71 @@ def create_location():
         cursor.close()
         conn.close()
 
+@app.route('/api/locations/<int:location_id>', methods=['PUT'])
+@jwt_required()
+def update_location(location_id):
+    """Update a location (admin only)"""
+    if not admin_required():
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json()
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''UPDATE locations SET location_name = %s, latitude = %s, longitude = %s, description = %s
+               WHERE location_id = %s''',
+            (
+                data.get('location_name'),
+                data.get('latitude'),
+                data.get('longitude'),
+                data.get('description'),
+                location_id
+            )
+        )
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Location not found'}), 404
+
+        return jsonify({'message': 'Location updated successfully'}), 200
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/locations/<int:location_id>', methods=['DELETE'])
+@jwt_required()
+def delete_location(location_id):
+    """Delete a location (admin only)"""
+    if not admin_required():
+        return jsonify({'error': 'Admin access required'}), 403
+
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database connection failed'}), 500
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM locations WHERE location_id = %s', (location_id,))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'error': 'Location not found'}), 404
+
+        return jsonify({'message': 'Location deleted successfully'}), 200
+    except Error as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 # ==================== STATS ENDPOINT ====================
 
 @app.route('/api/stats', methods=['GET'])
@@ -578,25 +644,45 @@ def get_stats():
         cursor.close()
         conn.close()
 
-# ==================== HOMEPAGE / STATIC SITE ====================
+# ==================== UPLOADS / STATIC SITE ====================
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 @app.route('/')
 def home():
-    return app.send_static_file('adnu-mosaic.html')
+    try:
+        return send_from_directory(frontend_path, 'adnu-mosaic.html')
+    except Exception as e:
+        print(f"Error serving home page: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin')
 def admin_page():
-    return app.send_static_file('admin.html')
+    try:
+        return send_from_directory(frontend_path, 'admin.html')
+    except Exception as e:
+        print(f"Error serving admin page: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/map')
+def map_page():
+    try:
+        return send_from_directory(frontend_path, 'adnu-mosaic-react.html')
+    except Exception as e:
+        print(f"Error serving map page: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ==================== ERROR HANDLERS ====================
 
 @app.errorhandler(404)
 def not_found(e):
-    return jsonify({'error': 'Endpoint not found'}), 404
+    return jsonify({'message': 'Endpoint not found', 'success': False}), 404
 
 @app.errorhandler(500)
 def internal_error(e):
-    return jsonify({'error': 'Internal server error'}), 500
+    return jsonify({'message': 'Internal server error', 'success': False}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -7,22 +7,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="style.css">
-<base target="_blank">
-<base target="_blank">
-<base target="_blank">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
 </head>
 <body>
 
 <nav id="navbar">
   <div class="nav-logo">AdNU <span>Mosaic</span></div>
   <div class="nav-center-links">
-    <a href="adnu-mosaic.html" class="nav-btn">Pins</a>
+    <a href="/" class="nav-btn">Pins</a>
     <button class="nav-btn active" onclick="app.showPage('explore')">Pin Map</button>
     <button class="nav-btn" onclick="app.openCreateModal()">Create Pin</button>
   </div>
   <div class="nav-right-links">
-    <button class="nav-btn" onclick="app.showPage('admin')">Admin</button>
+    <a href="admin.html" class="nav-btn">Admin</a>
   </div>
 </nav>
 
@@ -49,8 +49,8 @@
       <div class="map-legend">
         <div class="map-legend-title">AdNU Campus Map</div>
         <div class="map-legend-item"><div class="legend-pin"></div> Pin</div>
-        <div class="map-legend-item">Click pin to view pin details</div>
-        <div class="map-legend-item">Click card to locate on map</div>
+        <div class="map-legend-item">Click pin to view details</div>
+        <div class="map-legend-item" style="color: #f5c842; font-weight: 600;">Double-click to create pin</div>
       </div>
     </div>
 
@@ -62,9 +62,11 @@
 
 <!-- Create Pin Modal -->
 <div id="create-pin-overlay" class="modal-overlay" style="backdrop-filter: blur(12px); background: rgba(12, 22, 44, 0.55);" onclick="app.closeCreateModal(event)">
-  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="max-width: 1200px; max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
     <button class="modal-close-btn" onclick="app.closeCreateModal(event)" style="z-index: 10;">&times;</button>
-    <div class="form-section" style="padding: 0; border: none; box-shadow: none; margin: 0;">
+
+    <!-- Left side: Form -->
+    <div class="form-section" style="padding: 0; border: none; box-shadow: none; margin: 0; flex: 1; min-width: 0;">
       <h2 style="margin-bottom: 1.5rem; padding-right: 40px;">Share Your Pin</h2>
 
       <div class="success-message" id="success-msg">Your pin has been created successfully!</div>
@@ -88,9 +90,10 @@
 
         <div class="form-group">
           <label for="location-name">Building / Location <span>(pin will appear here on map)</span></label>
-          <select id="location-name" required onchange="app.onLocationChange()">
+          <select id="location-name" onchange="app.onLocationChange()">
             <option value="">Select a building or location...</option>
           </select>
+          <button type="button" class="btn btn-secondary" onclick="app.openMapPicker()" style="margin-top: 0.5rem; width: 100%;">Or click map to select location</button>
         </div>
 
         <input type="hidden" id="location-lat">
@@ -132,6 +135,13 @@
         </div>
       </form>
     </div>
+
+    <!-- Right side: Map -->
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+      <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--gray-600);">Click the location button below or click on the map to select coordinates</p>
+      <div id="map-picker-container" style="flex: 1; border-radius: 12px; overflow: hidden; border: 2px solid var(--gray-200); min-height: 400px; background: #f0f0f0;"></div>
+      <p id="map-picker-coords" style="color: var(--gray-700); font-size: 0.85rem; margin-top: 1rem; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">Selected: <span id="map-picker-coords-text" style="font-weight: 600; color: var(--gold);">None</span></p>
+    </div>
   </div>
 </div>
 
@@ -148,8 +158,8 @@
 
         <form id="login-form" onsubmit="app.adminLogin(event)">
           <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" placeholder="admin@adnu.edu.ph" required>
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="admin" required>
           </div>
 
           <div class="form-group">
@@ -223,11 +233,9 @@ const app = {
       attributionControl: true
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
-      maxZoom: 19,
-      maxNativeZoom: 19
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
     }).addTo(this.map);
 
     this.campusPolygon = L.polygon(CAMPUS_POLYGON, {
@@ -250,7 +258,20 @@ const app = {
       zIndexOffset: -1000
     }).addTo(this.map);
 
-    this.addLocationLabels();
+    // Add map double-click handler for creating pins
+    this.map.on('dblclick', (e) => {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      this.openCreateModalWithCoordinates(lat, lng);
+    });
+  },
+
+  openCreateModalWithCoordinates(lat, lng) {
+    document.getElementById('location-name').value = '';
+    document.getElementById('location-lat').value = lat.toFixed(8);
+    document.getElementById('location-lng').value = lng.toFixed(8);
+    document.getElementById('location-desc').value = '';
+    this.openCreateModal();
   },
 
   addLocationLabels() {
@@ -276,6 +297,9 @@ const app = {
   },
 
   addMarkers() {
+    // Clean up preview tooltip
+    this.hidePinPreview();
+
     // Remove old markers
     this.markers.forEach(marker => this.map.removeLayer(marker));
     this.markers = [];
@@ -319,8 +343,27 @@ const app = {
       const pinCount = group.length;
       const pinIdBadge = `<div class="pin-id-badge">#${pin.pin_id}</div>`;
 
+      // Check if pin has images
+      const hasImages = pin.image_urls && pin.image_urls.length > 0;
+
+      // Conditionally set pin size based on whether it has images
+      let iconSize, iconAnchor, popupAnchor, pinClass;
+      if (hasImages) {
+        // Large pin for pins with photos
+        iconSize = [40, 48];
+        iconAnchor = [20, 48];
+        popupAnchor = [0, -48];
+        pinClass = 'custom-pin-wrapper pin-with-photo';
+      } else {
+        // Small pin for pins without photos
+        iconSize = [24, 28];
+        iconAnchor = [12, 28];
+        popupAnchor = [0, -28];
+        pinClass = 'custom-pin-wrapper pin-no-photo';
+      }
+
       const icon = L.divIcon({
-        className: 'custom-pin-wrapper',
+        className: pinClass,
         html: `
           <div class="custom-pin-icon">
             <div class="pin-pulse"></div>
@@ -329,27 +372,90 @@ const app = {
             ${pinIdBadge}
           </div>
         `,
-        iconSize: [36, 42],
-        iconAnchor: [18, 42],
-        popupAnchor: [0, -42]
+        iconSize: iconSize,
+        iconAnchor: iconAnchor,
+        popupAnchor: popupAnchor
       });
 
       const marker = L.marker([finalLat, finalLng], { icon })
-        .addTo(this.map)
-        .bindPopup(this.createPopupContent(pin, pinCount), {
-          closeButton: true,
-          closeOnClick: false
-        });
+        .addTo(this.map);
 
       marker.pinId = pin.pin_id;
       marker.trueLat = lat;
       marker.trueLng = lng;
+      marker.pin = pin;
+      marker.pinCount = pinCount;
+
+      // Click handler to open full post modal
+      marker.on('click', () => {
+        this.openPinModal(pin.pin_id);
+      });
+
+      // Add hover preview functionality
+      marker.on('mouseover', () => {
+        this.showPinPreview(marker, pin);
+      });
+
+      marker.on('mouseout', () => {
+        this.hidePinPreview();
+      });
+
       this.markers.push(marker);
     });
 
     // DO NOT auto-fit bounds — keeps map centered on campus
     // Pins are visible at default zoom level
     console.log('Total markers on map:', this.markers.length);
+  },
+
+  pinPreviewTooltip: null,
+
+  showPinPreview(marker, pin) {
+    this.hidePinPreview();
+
+    const hasImages = pin.image_urls && pin.image_urls.length > 0;
+    const firstImage = hasImages ? this.resolveImageUrl(pin.image_urls[0]) : null;
+    const imageHtml = hasImages ? `<div style="width: 100%; height: 150px; background-image: url('${firstImage}'); background-size: cover; background-position: center; border-radius: 8px 8px 0 0;"></div>` : '';
+    const contentPreview = pin.content.substring(0, 100) + (pin.content.length > 100 ? '...' : '');
+    const authorInitials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+    const tooltipHtml = `
+      <div style="background: white; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); overflow: hidden; max-width: 280px; z-index: 1000; animation: fadeIn 0.2s ease;">
+        ${imageHtml}
+        <div style="padding: 1rem;">
+          <div style="font-weight: 600; font-size: 0.95rem; color: var(--navy); margin-bottom: 0.5rem;">#${pin.pin_id} ${pin.title}</div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--gray-600);">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--gold); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem;">${authorInitials}</div>
+            <div>
+              <div style="font-weight: 500; color: var(--gray-800);">${pin.author || 'Anonymous'}</div>
+              <div>${new Date(pin.created_at).toLocaleDateString()}</div>
+            </div>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--gray-700); line-height: 1.4; margin-bottom: 0.75rem;">${contentPreview}</p>
+          <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.8rem; color: var(--gold); font-weight: 600;">
+            <i class="fas fa-location-dot"></i> ${pin.location_name || 'Campus'}
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.pinPreviewTooltip = L.popup({
+      className: 'pin-preview-popup',
+      closeButton: false,
+      closeOnClick: false,
+      offset: [0, -30],
+      autoPan: false
+    })
+      .setLatLng(marker.getLatLng())
+      .setContent(tooltipHtml)
+      .addTo(this.map);
+  },
+
+  hidePinPreview() {
+    if (this.pinPreviewTooltip) {
+      this.map.removeLayer(this.pinPreviewTooltip);
+      this.pinPreviewTooltip = null;
+    }
   },
 
   createPopupContent(pin, countAtLocation) {
@@ -409,6 +515,97 @@ const app = {
     this.initMiniMap(location.latitude, location.longitude, location.location_name);
   },
 
+  mapPickerCoordinates: null,
+  mapPicker: null,
+  mapPickerMarker: null,
+
+  openMapPicker() {
+    this.initMapPicker();
+  },
+
+  initMapPicker() {
+    const container = document.getElementById('map-picker-container');
+    if (!container) return;
+
+    if (this.mapPicker) {
+      this.mapPicker.remove();
+    }
+
+    container.innerHTML = '';
+
+    this.mapPicker = L.map('map-picker-container', {
+      center: ADNU_CENTER,
+      zoom: DEFAULT_ZOOM,
+      maxBounds: CAMPUS_BOUNDS,
+      maxBoundsViscosity: 1.0,
+      minZoom: 16,
+      maxZoom: 19,
+      zoomControl: true,
+      attributionControl: true
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(this.mapPicker);
+
+    L.polygon(CAMPUS_POLYGON, {
+      color: 'rgba(245,200,66,0.95)',
+      weight: 3,
+      fillColor: '#f5c842',
+      fillOpacity: 0.12,
+      dashArray: '10, 8'
+    }).addTo(this.mapPicker);
+
+    this.mapPicker.on('click', (e) => {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      this.selectMapPickerLocation(lat, lng);
+    });
+
+    this.mapPicker.invalidateSize();
+  },
+
+  selectMapPickerLocation(lat, lng) {
+    if (this.mapPickerMarker) {
+      this.mapPicker.removeLayer(this.mapPickerMarker);
+    }
+
+    this.mapPickerCoordinates = { lat, lng };
+
+    const icon = L.divIcon({
+      className: 'custom-pin-wrapper pin-with-photo',
+      html: `
+        <div class="custom-pin-icon">
+          <div class="pin-pulse"></div>
+          <div class="pin-head"><i class="fas fa-map-pin"></i></div>
+          <div class="pin-point"></div>
+        </div>
+      `,
+      iconSize: [40, 48],
+      iconAnchor: [20, 48],
+      popupAnchor: [0, -48]
+    });
+
+    this.mapPickerMarker = L.marker([lat, lng], { icon })
+      .addTo(this.mapPicker)
+      .bindPopup(`<div style="text-align: center;"><strong>Selected Location</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}</div>`)
+      .openPopup();
+
+    document.getElementById('map-picker-coords-text').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    document.getElementById('location-lat').value = lat.toFixed(8);
+    document.getElementById('location-lng').value = lng.toFixed(8);
+  },
+
+  closeMapPicker() {
+    if (this.mapPicker) {
+      this.mapPicker.remove();
+      this.mapPicker = null;
+      this.mapPickerMarker = null;
+    }
+    this.mapPickerCoordinates = null;
+  },
+
   initMiniMap(lat, lng, name) {
     const container = document.getElementById('mini-map');
     container.innerHTML = '';
@@ -463,6 +660,11 @@ const app = {
     }
   },
 
+  resolveImageUrl(url) {
+    if (!url) return url;
+    return url.startsWith('/uploads/') ? `${API}${url}` : url;
+  },
+
   async loadPins() {
     try {
       const res = await axios.get(`${API}/pins`);
@@ -512,18 +714,19 @@ const app = {
       const bg = bgClasses[index % bgClasses.length];
       const initials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
       const hasImages = pin.image_urls && pin.image_urls.length > 0;
-      const firstImage = hasImages ? pin.image_urls[0] : null;
+      const firstImage = hasImages ? this.resolveImageUrl(pin.image_urls[0]) : null;
       const imgStyle = hasImages ? `background-image: url('${firstImage}'); background-size: cover; background-position: center;` : '';
       const imgCounter = hasImages && pin.image_urls.length > 1 ? `<div class="pin-img-counter">${pin.image_urls.length} photos</div>` : '';
       const imgContent = hasImages 
         ? '' 
         : `<svg width="50" height="50" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
       return `
-      <div class="pin-card" onclick="app.openPinModal(${pin.pin_id})">
+      <div class="pin-card ${hasImages ? '' : 'pin-card-no-image'}" onclick="app.openPinModal(${pin.pin_id})">
         <div class="pin-img ${hasImages ? '' : bg}" style="${imgStyle}">
           ${imgContent}
           ${imgCounter}
           <div class="pin-loc-badge">${pin.location_name || 'Campus'}</div>
+          <div style="position:absolute; top:8px; right:8px; background:rgba(26,46,90,0.8); color:#fff; padding:3px 8px; border-radius:6px; font-size:0.7rem; font-weight:600;">#${pin.pin_id}</div>
         </div>
         <div class="pin-body">
           <div class="pin-meta">
@@ -533,9 +736,6 @@ const app = {
           </div>
           <div class="pin-title">${pin.title}</div>
           <div class="pin-content">${pin.content}</div>
-        </div>
-        <div class="pin-footer">
-          <span class="category-tag tag-campus">Pin #${pin.pin_id}</span>
         </div>
       </div>
     `;
@@ -551,12 +751,13 @@ const app = {
     const hasImages = pin.image_urls && pin.image_urls.length > 0;
     let imgSection = '';
     if (hasImages) {
-      if (pin.image_urls.length === 1) {
-        imgSection = `<div class="modal-pin-image" onclick="app.openImageViewer('${pin.image_urls[0]}')" style="background-image: url('${pin.image_urls[0]}'); background-size: cover; background-position: center; height: 220px; border-radius: 14px; margin-bottom: 1.25rem; cursor: zoom-in; position: relative;"><div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; pointer-events:none;"><i class="fas fa-expand"></i> Click to expand</div></div>`;
+      const resolvedUrls = pin.image_urls.map(url => this.resolveImageUrl(url));
+      if (resolvedUrls.length === 1) {
+        imgSection = `<div class="modal-pin-image" onclick="app.openImageViewer('${resolvedUrls[0]}')" style="background-image: url('${resolvedUrls[0]}'); background-size: cover; background-position: center; height: 220px; border-radius: 14px; margin-bottom: 1.25rem; cursor: zoom-in; position: relative;"><div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; pointer-events:none;"><i class="fas fa-expand"></i> Click to expand</div></div>`;
       } else {
         imgSection = `
           <div class="modal-image-carousel" style="display:flex; gap:0.5rem; overflow-x:auto; margin-bottom:1.25rem; padding-bottom:0.5rem;">
-            ${pin.image_urls.map((url, i) => `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background-image:url('${url}'); background-size:cover; background-position:center; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${pin.image_urls.length}</span></div>`).join('')}
+            ${resolvedUrls.map((url, i) => `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background-image:url('${url}'); background-size:cover; background-position:center; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${resolvedUrls.length}</span></div>`).join('')}
           </div>
         `;
       }
@@ -760,6 +961,9 @@ const app = {
   openCreateModal() {
     document.getElementById('create-pin-overlay').classList.add('visible');
     document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+      this.initMapPicker();
+    }, 100);
   },
 
   closeCreateModal(event) {
@@ -772,11 +976,13 @@ const app = {
     document.getElementById('location-preview').style.display = 'none';
     document.getElementById('location-lat').value = '';
     document.getElementById('location-lng').value = '';
+    document.getElementById('map-picker-coords-text').textContent = 'None';
     this.clearAllImages();
     if (this.miniMap) {
       this.miniMap.remove();
       this.miniMap = null;
     }
+    this.closeMapPicker();
   },
 
   async createPin(event) {
@@ -785,19 +991,23 @@ const app = {
     btn.classList.add('loading');
 
     try {
-      const locationSelect = document.getElementById('location-name');
-      const locationId = parseInt(locationSelect.value);
-      const selectedLocation = this.locations.find(l => l.location_id === locationId);
-
-      if (!selectedLocation) {
-        throw new Error('Please select a valid location');
-      }
-
-      const lat = parseFloat(document.getElementById('location-lat').value) || selectedLocation?.latitude;
-      const lng = parseFloat(document.getElementById('location-lng').value) || selectedLocation?.longitude;
+      const lat = parseFloat(document.getElementById('location-lat').value);
+      const lng = parseFloat(document.getElementById('location-lng').value);
 
       if (!lat || !lng) {
-        throw new Error('Selected location has no coordinates.');
+        throw new Error('Please select a location by choosing from the dropdown or using the map picker.');
+      }
+
+      const locationSelect = document.getElementById('location-name');
+      const locationId = parseInt(locationSelect.value);
+      let selectedLocation = null;
+      let locationName = 'Custom Location';
+
+      if (locationId) {
+        selectedLocation = this.locations.find(l => l.location_id === locationId);
+        if (selectedLocation) {
+          locationName = selectedLocation.location_name;
+        }
       }
 
       const author = document.getElementById('author').value.trim();
@@ -807,8 +1017,8 @@ const app = {
         author: author,
         title: document.getElementById('title').value,
         content: document.getElementById('content').value,
-        location_id: locationId,
-        location_name: selectedLocation.location_name,
+        location_id: locationId || null,
+        location_name: locationName,
         latitude: lat,
         longitude: lng,
         visibility: 'public',
@@ -816,13 +1026,9 @@ const app = {
       };
 
       await axios.post(`${API}/pins`, data);
-      document.getElementById('success-msg').classList.add('show');
-
-      setTimeout(() => {
-        document.getElementById('success-msg').classList.remove('show');
-        this.closeCreateModal();
-        this.loadPins();
-      }, 1500);
+      this.closeCreateModal();
+      await this.loadPins();
+      this.showPage('explore');
     } catch (err) {
       document.getElementById('error-msg').textContent = 'Failed to create pin: ' + (err.response?.data?.error || err.message);
       document.getElementById('error-msg').classList.add('show');
@@ -838,7 +1044,7 @@ const app = {
 
     try {
       const res = await axios.post(`${API}/auth/login`, {
-        email: document.getElementById('email').value,
+        username: document.getElementById('username').value,
         password: document.getElementById('password').value
       });
 
@@ -867,7 +1073,10 @@ const app = {
     const button = document.querySelector(`button[onclick="app.showPage('${page}')"]`);
     if (button) button.classList.add('active');
 
+    this.hidePinPreview();
+
     if (page === 'explore') {
+      this.loadLocations();
       this.loadPins();
       setTimeout(() => {
         if (this.map) this.map.invalidateSize();

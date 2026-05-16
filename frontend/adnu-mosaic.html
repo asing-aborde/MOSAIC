@@ -5,14 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-<base target="_blank">
+<link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
-<base target="_blank">
 </head>
 <body>
 
@@ -26,8 +24,8 @@
   <div class="nav-logo">AdNU <em style="color:var(--white);font-style:normal;">|</em> <span>Mosaic</span></div>
   <div class="nav-center-links">
     <button class="nav-btn active" onclick="showPage('pins')">Pins</button>
-    <a href="adnu-mosaic-react.html" class="nav-btn" style="text-decoration:none;">Pin Map</a>
-    <a href="adnu-mosaic-react.html" class="nav-btn" style="text-decoration:none;">Create Pin</a>
+    <a href="/map" class="nav-btn" style="text-decoration:none;">Pin Map</a>
+    <a href="/map" class="nav-btn" style="text-decoration:none;">Create Pin</a>
   </div>
   <div class="nav-right-links">
     <button class="nav-btn" onclick="window.location.href='admin'">Admin</button>
@@ -58,6 +56,12 @@
 <script>
 /* ── Flask API base URL ── */
 const API = 'http://127.0.0.1:5000';
+
+function resolveImageUrl(url) {
+  if (!url) return url;
+  return url.startsWith('/uploads/') ? API + url : url;
+}
+
 let allPins = [];
 
 /* ── Page routing ── */
@@ -132,7 +136,7 @@ function renderPins(pins) {
       }
     }
     const hasImage = images.length > 0;
-    const firstImage = hasImage ? images[0] : '';
+    const firstImage = hasImage ? resolveImageUrl(images[0]) : '';
     const imgStyle = hasImage ? `background-image: url('${firstImage}'); background-size: cover; background-position: center;` : '';
     const imgContent = hasImage
       ? (images.length > 1 ? `<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;"><i class="fas fa-images"></i> ${images.length}</div>` : '')
@@ -172,10 +176,17 @@ function filterPins() {
 
 /* ── Init ── */
 window.addEventListener('load', () => {
-  setTimeout(() => {
+  const isFirstLoad = !sessionStorage.getItem('pins_visited');
+  if (isFirstLoad) {
+    sessionStorage.setItem('pins_visited', 'true');
+    setTimeout(() => {
+      document.getElementById('loader').classList.add('hidden');
+      setTimeout(() => document.getElementById('loader').remove(), 400);
+    }, 1400);
+  } else {
     document.getElementById('loader').classList.add('hidden');
-    setTimeout(() => document.getElementById('loader').remove(), 400);
-  }, 1400);
+    document.getElementById('loader').remove();
+  }
   loadPins();
 });
 
@@ -196,6 +207,8 @@ function openPinModal(pinId) {
       images = [pin.image_url];
     }
   }
+
+  images = images.map(resolveImageUrl);
 
   let imgSection = '';
   if (images.length === 1) {
