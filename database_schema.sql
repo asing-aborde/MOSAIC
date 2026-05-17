@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS pins (
   category VARCHAR(50) DEFAULT 'campus',
   visibility ENUM('public', 'private') DEFAULT 'public',
   image_url LONGTEXT,
+  media_type ENUM('image', 'video') DEFAULT 'image',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (location_id) REFERENCES locations(location_id) ON DELETE SET NULL,

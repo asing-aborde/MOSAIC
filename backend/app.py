@@ -14,7 +14,11 @@ load_dotenv()
 
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 UPLOAD_FOLDER = os.path.join(frontend_path, 'uploads')
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'mov'}
+ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50MB
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, static_folder=frontend_path, static_url_path='/static')
@@ -77,10 +81,16 @@ def admin_required():
 
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def is_video_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'mp4', 'webm', 'mov'}
+def get_media_type(filename):
+    """Determine if file is image or video based on extension"""
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    if ext in ALLOWED_VIDEO_EXTENSIONS:
+        return 'video'
+    elif ext in ALLOWED_IMAGE_EXTENSIONS:
+        return 'image'
+    return None
 
 @app.route('/api/upload', methods=['POST'])
 def upload_image():
@@ -92,7 +102,19 @@ def upload_image():
         return jsonify({'error': 'No file selected'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid file type. Supported types are PNG, JPG, JPEG, GIF, WEBP, MP4, WEBM, MOV.'}), 400
+        return jsonify({'error': 'Invalid file type. Allowed: images (png, jpg, jpeg, gif, webp) and videos (mp4, webm, mov)'}), 400
+
+    media_type = get_media_type(file.filename)
+
+    # Check file size limits
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+
+    if media_type == 'video' and file_size > MAX_VIDEO_SIZE:
+        return jsonify({'error': f'Video file too large. Maximum size: 50MB'}), 400
+    elif media_type == 'image' and file_size > MAX_IMAGE_SIZE:
+        return jsonify({'error': f'Image file too large. Maximum size: 5MB'}), 400
 
     filename = secure_filename(file.filename)
     name, ext = os.path.splitext(filename)
@@ -105,7 +127,10 @@ def upload_image():
     file.save(file_path)
 
     base_url = request.host_url.rstrip('/')
-    return jsonify({'url': f'{base_url}/uploads/{filename}'}), 201
+    return jsonify({
+        'url': f'{base_url}/uploads/{filename}',
+        'media_type': media_type
+    }), 201
 
 # ==================== AUTHENTICATION ENDPOINTS ====================
 
@@ -372,9 +397,9 @@ def create_pin():
             stored_image = None
 
         cursor.execute(
-            '''INSERT INTO pins (author, title, content, location_id, latitude, longitude, 
-                                 location_name, category, visibility, image_url)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+            '''INSERT INTO pins (author, title, content, location_id, latitude, longitude,
+                                 location_name, category, visibility, image_url, media_type)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
             (
                 data.get('author'),
                 data.get('title'),
@@ -385,7 +410,8 @@ def create_pin():
                 data.get('location_name', 'Campus'),
                 data.get('category', 'campus'),
                 data.get('visibility', 'public'),
-                stored_image
+                stored_image,
+                data.get('media_type', 'image')
             )
         )
         conn.commit()
