@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 <style>
 body { background: #eef2f7; }
@@ -101,12 +101,15 @@ body { background: #eef2f7; }
       <div class="admin-panel">
         <div class="panel-title">
           <h2>Pin Management</h2>
-          <button class="action-btn" onclick="openPinForm()">New Pin</button>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+            <button class="action-btn" onclick="openPinForm()">New Pin</button>
+            <button class="action-btn" onclick="bulkDeletePins()" style="background:#bb2f2f;">Delete selected</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="admin-table">
             <thead>
-              <tr><th>ID</th><th>Title</th><th>Author</th><th>Location</th><th>Visibility</th><th>Created</th><th>Actions</th></tr>
+              <tr><th><input type="checkbox" id="select-all-pins" onchange="toggleSelectAllPins(this)"></th><th>ID</th><th>Title</th><th>Author</th><th>Location</th><th>Visibility</th><th>Created</th><th>Actions</th></tr>
             </thead>
             <tbody id="pins-table"></tbody>
           </table>
@@ -309,6 +312,7 @@ async function loadAdminPins() {
     body.innerHTML = data.map(pin => {
       const badgeClass = pin.visibility === 'private' ? 'badge-private' : 'badge-public';
       return `<tr>
+        <td><input type="checkbox" class="pin-checkbox" value="${pin.pin_id}" onchange="updateSelectAllState()"></td>
         <td>${pin.pin_id}</td>
         <td>${pin.title || '—'}</td>
         <td>${pin.author || 'Anonymous'}</td>
@@ -395,6 +399,38 @@ async function deletePin(pinId) {
     await loadAdminPins();
   } catch (err) {
     showAlert('dashboard-alert', err.message || 'Unable to delete pin', 'error');
+  }
+}
+
+function toggleSelectAllPins(source) {
+  document.querySelectorAll('.pin-checkbox').forEach(cb => cb.checked = source.checked);
+}
+
+function updateSelectAllState() {
+  const checkboxes = Array.from(document.querySelectorAll('.pin-checkbox'));
+  const selectAll = document.getElementById('select-all-pins');
+  if (!selectAll) return;
+  selectAll.checked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+  selectAll.indeterminate = checkboxes.some(cb => cb.checked) && !checkboxes.every(cb => cb.checked);
+}
+
+async function bulkDeletePins() {
+  const selected = Array.from(document.querySelectorAll('.pin-checkbox:checked')).map(cb => parseInt(cb.value, 10));
+  if (!selected.length) {
+    showAlert('dashboard-alert', 'Select one or more pins first.', 'error');
+    return;
+  }
+
+  if (!confirm(`Delete ${selected.length} selected pin(s) permanently?`)) return;
+
+  try {
+    for (const pinId of selected) {
+      await request(`/api/pins/${pinId}`, { method: 'DELETE' });
+    }
+    showAlert('dashboard-alert', `${selected.length} pin(s) deleted successfully.`);
+    await loadAdminPins();
+  } catch (err) {
+    showAlert('dashboard-alert', err.message || 'Unable to delete selected pins', 'error');
   }
 }
 

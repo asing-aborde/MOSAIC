@@ -47,6 +47,37 @@ def get_db_connection():
         return None
 
 
+schema_initialized = False
+
+
+def ensure_database_schema():
+    conn = get_db_connection()
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SHOW TABLES LIKE 'pins'")
+        if cursor.fetchone():
+            cursor.execute("SHOW COLUMNS FROM pins LIKE 'media_type'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE pins ADD COLUMN media_type ENUM('image','video') DEFAULT 'image'")
+                conn.commit()
+    except Error as e:
+        print(f"Database schema migration error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.before_request
+def initialize_database():
+    global schema_initialized
+    if not schema_initialized:
+        ensure_database_schema()
+        schema_initialized = True
+
+
 def get_current_user():
     identity = get_jwt_identity()
     if identity == 'admin':

@@ -4,12 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="/static/style.css">
 <style>
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .pin-card--unread {
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.92), rgba(30, 64, 175, 0.92));
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #f8fafc;
+  }
+
+  .pin-card--read {
+    background: #f8fafc;
+    border: 1px solid #dbeafe;
+  }
+
+  .pin-card--read .pin-title,
+  .pin-card--read .pin-author,
+  .pin-card--read .pin-content,
+  .pin-card--read .pin-location,
+  .pin-card--read .pin-date {
+    color: #334155;
+  }
+
+  .pin-read-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255,255,255,0.92);
+    color: #334155;
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
 </style>
 </head>
 <body>
@@ -44,13 +77,17 @@
       </select>
     </div>
 
-    <div class="map-container map-container-bordered">
+    <div class="map-container map-container-bordered" style="position:relative;">
       <div id="campus-map"></div>
+      <div class="map-legend">
+        <div class="map-legend-title">Map Legend</div>
+        <div class="map-legend-item"><span style="width:12px;height:12px;border-radius:999px;background:#2563eb;display:inline-block;"></span> Unread pin</div>
+        <div class="map-legend-item"><span style="width:12px;height:12px;border-radius:999px;background:#94a3b8;display:inline-block;"></span> Read pin</div>
+      </div>
     </div>
 
-    <div id="stats"></div>
-
-    <div id="pins-grid" class="pins-grid"></div>
+    <div id="stats" style="display:none;"></div>
+    <div id="pins-grid" class="pins-grid" style="display:none;"></div>
   </div>
 </div>
 
@@ -228,6 +265,25 @@ const app = {
   locationLabels: [],
   campusPolygon: null,
 
+  getViewedPins() {
+    try {
+      const ids = JSON.parse(localStorage.getItem('viewedPins') || '[]');
+      return Array.isArray(ids) ? ids.map(String) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  markPinViewed(pinId) {
+    const viewed = new Set(this.getViewedPins());
+    viewed.add(String(pinId));
+    localStorage.setItem('viewedPins', JSON.stringify([...viewed]));
+  },
+
+  isPinViewed(pinId) {
+    return this.getViewedPins().includes(String(pinId));
+  },
+
   async init() {
     await this.loadLocations();
     await this.loadPins();
@@ -360,6 +416,7 @@ const app = {
 
       // Check if pin has images
       const hasImages = pin.image_urls && pin.image_urls.length > 0;
+      const pinStateClass = this.isPinViewed(pin.pin_id) ? 'pin-read' : 'pin-unread';
 
       // Conditionally set pin size based on whether it has images
       let iconSize, iconAnchor, popupAnchor, pinClass;
@@ -368,13 +425,13 @@ const app = {
         iconSize = [40, 48];
         iconAnchor = [20, 48];
         popupAnchor = [0, -48];
-        pinClass = 'custom-pin-wrapper pin-with-photo';
+        pinClass = `custom-pin-wrapper pin-with-photo ${pinStateClass}`;
       } else {
         // Small pin for pins without photos
         iconSize = [24, 28];
         iconAnchor = [12, 28];
         popupAnchor = [0, -28];
-        pinClass = 'custom-pin-wrapper pin-no-photo';
+        pinClass = `custom-pin-wrapper pin-no-photo ${pinStateClass}`;
       }
 
       const icon = L.divIcon({
@@ -428,15 +485,20 @@ const app = {
   showPinPreview(marker, pin) {
     this.hidePinPreview();
 
-    const hasImages = pin.image_urls && pin.image_urls.length > 0;
-    const firstImage = hasImages ? this.resolveImageUrl(pin.image_urls[0]) : null;
-    const imageHtml = hasImages ? `<div style="width: 100%; height: 150px; background-image: url('${firstImage}'); background-size: cover; background-position: center; border-radius: 8px 8px 0 0;"></div>` : '';
+    const hasMedia = pin.image_urls && pin.image_urls.length > 0;
+    const isVideo = pin.media_type === 'video' && hasMedia;
+    const firstMedia = hasMedia ? this.resolveImageUrl(pin.image_urls[0]) : null;
+    const mediaHtml = isVideo
+      ? `<video src="${firstMedia}" muted loop playsinline preload="metadata" style="width:100%;height:150px;object-fit:cover;display:block;border-radius:8px 8px 0 0;" onmouseover="this.play()" onmouseout="this.pause()"></video>`
+      : hasMedia
+        ? `<div style="width: 100%; height: 150px; background-image: url('${firstMedia}'); background-size: cover; background-position: center; border-radius: 8px 8px 0 0;"></div>`
+        : '';
     const contentPreview = pin.content.substring(0, 100) + (pin.content.length > 100 ? '...' : '');
     const authorInitials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     const tooltipHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); overflow: hidden; max-width: 280px; z-index: 1000; animation: fadeIn 0.2s ease;">
-        ${imageHtml}
+        ${mediaHtml}
         <div style="padding: 1rem;">
           <div style="font-weight: 600; font-size: 0.95rem; color: var(--navy); margin-bottom: 0.5rem;">#${pin.pin_id} ${pin.title}</div>
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--gray-600);">
@@ -736,8 +798,8 @@ const app = {
       let mediaCounter = '';
 
       if (isVideo) {
-        mediaContent = `<video class="pin-video" src="${firstUrl}" autoplay muted loop playsinline style="width:100%; height:100%; object-fit:cover; display:block;"></video>`;
-        mediaCounter = `<div class="pin-img-counter" style="background:rgba(0,0,0,0.6); color:#fff; padding:4px 8px; border-radius:4px;">Video</div>`;
+        mediaContent = `<video class="pin-video" src="${firstUrl}" muted loop playsinline preload="metadata" onmouseover="this.play()" onmouseout="this.pause()" style="width:100%; height:100%; object-fit:cover; display:block;"></video>`;
+        mediaCounter = '';
       } else if (hasMedia) {
         mediaContent = '';
         mediaCounter = pin.image_urls.length > 1 ? `<div class="pin-img-counter">${pin.image_urls.length} photos</div>` : '';
@@ -747,9 +809,14 @@ const app = {
 
       const imgStyle = !isVideo && hasMedia ? `background-image: url('${firstUrl}'); background-size: cover; background-position: center;` : '';
 
+      const isViewed = this.isPinViewed(pin.pin_id);
+      const readClass = isViewed ? 'pin-card--read' : 'pin-card--unread';
+      const statusBadge = isViewed ? '<div class="pin-read-badge">Viewed</div>' : '';
+
       return `
-      <div class="pin-card ${hasMedia ? '' : 'pin-card-no-image'}" onclick="app.openPinModal(${pin.pin_id})">
+      <div class="pin-card ${hasMedia ? '' : 'pin-card-no-image'} ${readClass}" onclick="app.openPinModal(${pin.pin_id})">
         <div class="pin-img ${hasMedia ? '' : bg}" style="${imgStyle}">
+          ${statusBadge}
           ${mediaContent}
           ${mediaCounter}
           <div class="pin-loc-badge">${pin.location_name || 'Campus'}</div>
@@ -770,6 +837,14 @@ const app = {
   },
 
   openPinModal(pinId) {
+    if (!this.isPinViewed(pinId)) {
+      this.markPinViewed(pinId);
+      this.renderPins();
+      if (this.map) {
+        this.addMarkers();
+      }
+    }
+
     const pin = this.pins.find(p => p.pin_id === pinId);
     if (!pin) return;
     this.highlightPinOnMap(pinId);
@@ -1182,6 +1257,12 @@ const app = {
       this.closeCreateModal();
       await this.loadPins();
       this.showPage('explore');
+      if (this.map) {
+        setTimeout(() => {
+          this.map.invalidateSize();
+          this.addMarkers();
+        }, 150);
+      }
     } catch (err) {
       document.getElementById('error-msg').textContent = 'Failed to create pin: ' + (err.response?.data?.error || err.message);
       document.getElementById('error-msg').classList.add('show');
