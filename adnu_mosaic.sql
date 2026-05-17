@@ -87,6 +87,7 @@ CREATE TABLE `pins` (
   `category` varchar(50) DEFAULT 'campus',
   `visibility` enum('public','private') DEFAULT 'public',
   `image_url` varchar(500) DEFAULT NULL,
+  `media_type` enum('image','video') DEFAULT 'image',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
