@@ -101,12 +101,15 @@ body { background: #eef2f7; }
       <div class="admin-panel">
         <div class="panel-title">
           <h2>Pin Management</h2>
-          <button class="action-btn" onclick="openPinForm()">New Pin</button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="action-btn" onclick="openPinForm()">New Pin</button>
+            <button class="action-btn" onclick="bulkDeletePins()" style="background:#bb2f2f; display:none;" id="bulk-delete-btn">Delete Selected</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="admin-table">
             <thead>
-              <tr><th>ID</th><th>Title</th><th>Author</th><th>Location</th><th>Visibility</th><th>Created</th><th>Actions</th></tr>
+              <tr><th style="width:30px;"><input type="checkbox" id="select-all-pins" onchange="toggleSelectAll()"></th><th>ID</th><th>Title</th><th>Author</th><th>Location</th><th>Created</th><th>Actions</th></tr>
             </thead>
             <tbody id="pins-table"></tbody>
           </table>
@@ -307,13 +310,12 @@ async function loadAdminPins() {
     adminPins = data;
     const body = document.getElementById('pins-table');
     body.innerHTML = data.map(pin => {
-      const badgeClass = pin.visibility === 'private' ? 'badge-private' : 'badge-public';
       return `<tr>
+        <td style="width:30px;"><input type="checkbox" class="pin-checkbox" value="${pin.pin_id}" onchange="updateBulkDeleteBtn()"></td>
         <td>${pin.pin_id}</td>
         <td>${pin.title || '—'}</td>
         <td>${pin.author || 'Anonymous'}</td>
         <td>${pin.location_name || 'Campus'}</td>
-        <td><span class="badge ${badgeClass}">${pin.visibility || 'public'}</span></td>
         <td>${pin.created_at ? pin.created_at.slice(0, 10) : '—'}</td>
         <td style="white-space:nowrap;">
           <button class="action-link" onclick="openPinForm(${pin.pin_id})">Edit</button>
@@ -395,6 +397,66 @@ async function deletePin(pinId) {
     await loadAdminPins();
   } catch (err) {
     showAlert('dashboard-alert', err.message || 'Unable to delete pin', 'error');
+  }
+}
+
+function toggleSelectAll() {
+  const selectAllCheckbox = document.getElementById('select-all-pins');
+  const pinCheckboxes = document.querySelectorAll('.pin-checkbox');
+  pinCheckboxes.forEach(checkbox => {
+    checkbox.checked = selectAllCheckbox.checked;
+  });
+  updateBulkDeleteBtn();
+}
+
+function updateBulkDeleteBtn() {
+  const selectedCount = document.querySelectorAll('.pin-checkbox:checked').length;
+  const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+  const selectAllCheckbox = document.getElementById('select-all-pins');
+  
+  if (selectedCount > 0) {
+    bulkDeleteBtn.style.display = 'block';
+    bulkDeleteBtn.textContent = `Delete Selected (${selectedCount})`;
+  } else {
+    bulkDeleteBtn.style.display = 'none';
+    selectAllCheckbox.checked = false;
+  }
+}
+
+async function bulkDeletePins() {
+  const selectedCheckboxes = document.querySelectorAll('.pin-checkbox:checked');
+  const pinIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.value));
+  
+  if (pinIds.length === 0) {
+    alert('No pins selected.');
+    return;
+  }
+  
+  const count = pinIds.length;
+  if (!confirm(`Delete ${count} pin${count > 1 ? 's' : ''} permanently? This cannot be undone.`)) return;
+  
+  try {
+    let deleteCount = 0;
+    let errorCount = 0;
+    
+    for (const pinId of pinIds) {
+      try {
+        await request(`/api/pins/${pinId}`, { method: 'DELETE' });
+        deleteCount++;
+      } catch (err) {
+        errorCount++;
+        console.error(`Failed to delete pin ${pinId}:`, err);
+      }
+    }
+    
+    let message = `Deleted ${deleteCount} pin${deleteCount > 1 ? 's' : ''} successfully.`;
+    if (errorCount > 0) {
+      message += ` (${errorCount} failed)`;
+    }
+    showAlert('dashboard-alert', message, errorCount > 0 ? 'error' : 'success');
+    await loadAdminPins();
+  } catch (err) {
+    showAlert('dashboard-alert', 'Bulk delete failed: ' + (err.message || 'Unknown error'), 'error');
   }
 }
 

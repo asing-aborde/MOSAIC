@@ -11,18 +11,35 @@
 <style>
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
+<style>
+  .pin-card.unread { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(245,200,66,0.3); }
+  .pin-card.unread .pin-img::before {
+    content: ''; position: absolute; top: 8px; left: 8px; width: 10px; height: 10px;
+    background: var(--gold); border-radius: 50%; box-shadow: 0 0 0 3px rgba(245,200,66,0.3);
+    z-index: 3; animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:0.7} }
+  .pin-card.read { border-color: var(--gray-200); opacity: 0.92; }
+  .pin-card.read .pin-title { color: var(--gray-600); }
+  .pin-card.read .pin-img { filter: grayscale(15%); }
+  .pin-read .pin-head { background: var(--gray-400) !important; border-color: var(--gray-600) !important; }
+  .pin-read .pin-head i { color: var(--gray-600) !important; }
+  .pin-read .pin-point { border-top-color: var(--gray-400) !important; opacity: 0.6 !important; }
+  .pin-read .pin-pulse { background: rgba(158,156,158,0.2) !important; }
+</style>
+<base target="_blank">
 </head>
 <body>
 
 <nav id="navbar">
   <div class="nav-logo">AdNU <span>Mosaic</span></div>
   <div class="nav-center-links">
-    <a href="/" class="nav-btn">Pins</a>
-    <button class="nav-btn active" onclick="app.showPage('explore')">Pin Map</button>
-    <button class="nav-btn" onclick="app.openCreateModal()">Create Pin</button>
+    <button type="button" class="nav-btn" onclick="event.preventDefault(); app.showPage('pins')">Pins</button>
+    <button type="button" class="nav-btn active" onclick="event.preventDefault(); app.showPage('explore')">Pin Map</button>
+    <button type="button" class="nav-btn" onclick="event.preventDefault(); app.openCreateModal()">Create Pin</button>
   </div>
   <div class="nav-right-links">
-    <a href="admin.html" class="nav-btn">Admin</a>
+    <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='admin.html'">Admin</button>
   </div>
 </nav>
 
@@ -54,15 +71,33 @@
       </div>
     </div>
 
-    <div id="stats"></div>
-
-    <div id="pins-grid" class="pins-grid"></div>
   </div>
 </div>
 
-<!-- Create Pin Modal -->
+<!-- PINS READ PAGE -->
+<div class="page" id="page-pins">
+  <div class="pins-page">
+    <div class="pins-header">
+      <div>
+        <h1>Pins</h1>
+        <p>Explore campus pins pinned by students & faculty</p>
+      </div>
+    </div>
+    
+    <div class="pins-controls">
+      <div class="search-wrap">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="search-input-pins" placeholder="Search pins by title or story…" oninput="app.filterPinsGrid()">
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="pins-grid" id="pins-grid"></div>
+  </div>
+</div>
+
+
 <div id="create-pin-overlay" class="modal-overlay" style="backdrop-filter: blur(12px); background: rgba(12, 22, 44, 0.55);" onclick="app.closeCreateModal(event)">
-  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="max-width: 1200px; max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
+  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="width: min(95vw, 1400px); max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
     <button class="modal-close-btn" onclick="app.closeCreateModal(event)" style="z-index: 10;">&times;</button>
 
     <!-- Left side: Form -->
@@ -107,16 +142,16 @@
 
         <!-- Multiple Image Upload Section -->
         <div class="form-group">
-          <label>Photos <span>(optional — add multiple photos)</span></label>
+          <label>Photos & Videos <span>(optional — add multiple files)</span></label>
           <div class="image-upload-area" id="image-upload-area"
                ondragover="app.onDragOver(event)" 
                ondragleave="app.onDragLeave(event)" 
                ondrop="app.onDrop(event)">
-            <input type="file" id="pin-image" accept="image/*" multiple style="display:none;" onchange="app.onImageSelected(event)">
+            <input type="file" id="pin-image" accept="image/*,video/*" multiple style="display:none;" onchange="app.onImageSelected(event)">
             <div class="image-upload-placeholder" id="image-placeholder" onclick="document.getElementById('pin-image').click()">
               <i class="fas fa-cloud-upload-alt"></i>
-              <p>Click or drag & drop photos here</p>
-              <span>JPEG, PNG, WEBP up to 5MB each</span>
+              <p>Click or drag & drop photos or videos here</p>
+              <span>JPEG, PNG, WEBP, MP4, WEBM, MOV up to 50MB each</span>
             </div>
             <div id="images-preview-grid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.75rem;"></div>
           </div>
@@ -212,6 +247,29 @@ const app = {
   markers: [],
   locationLabels: [],
   campusPolygon: null,
+
+  getReadPins() {
+    try { 
+      const data = localStorage.getItem('read_pins');
+      return data ? JSON.parse(data) : [];
+    }
+    catch (e) { 
+      return []; 
+    }
+  },
+  markPinAsRead(pinId) {
+    const read = this.getReadPins();
+    const id = Number(pinId);
+    if (!read.includes(id) && !read.includes(String(pinId))) {
+      read.push(id);
+      localStorage.setItem('read_pins', JSON.stringify(read));
+    }
+  },
+  isPinRead(pinId) {
+    const read = this.getReadPins();
+    const id = Number(pinId);
+    return read.includes(id) || read.includes(String(pinId));
+  },
 
   async init() {
     await this.loadLocations();
@@ -309,8 +367,6 @@ const app = {
       !isNaN(parseFloat(pin.latitude)) && !isNaN(parseFloat(pin.longitude))
     );
 
-    console.log('Pins with coords:', pinsWithCoords.length, pinsWithCoords);
-
     // Group by exact location
     const locationGroups = {};
     pinsWithCoords.forEach(pin => {
@@ -342,6 +398,7 @@ const app = {
 
       const pinCount = group.length;
       const pinIdBadge = `<div class="pin-id-badge">#${pin.pin_id}</div>`;
+      const isRead = this.isPinRead(pin.pin_id);
 
       // Check if pin has images
       const hasImages = pin.image_urls && pin.image_urls.length > 0;
@@ -363,12 +420,12 @@ const app = {
       }
 
       const icon = L.divIcon({
-        className: pinClass,
+        className: pinClass + (isRead ? ' pin-read' : ' pin-unread'),
         html: `
           <div class="custom-pin-icon">
-            <div class="pin-pulse"></div>
-            <div class="pin-head"><i class="fas fa-map-pin"></i></div>
-            <div class="pin-point"></div>
+            <div class="pin-pulse" style="${isRead ? 'background: rgba(158,156,158,0.2);' : 'background: rgba(245,200,66,0.55);'}"></div>
+            <div class="pin-head" style="${isRead ? 'background: var(--gray-400); border-color: var(--gray-600);' : 'background: var(--gold); border-color: rgba(255,255,255,0.9);'}"><i class="fas fa-map-pin" style="${isRead ? 'color: var(--gray-600);' : 'color: var(--navy);'}"></i></div>
+            <div class="pin-point" style="${isRead ? 'border-top-color: var(--gray-400); opacity: 0.6;' : 'border-top-color: var(--gold); opacity: 1;'}"></div>
             ${pinIdBadge}
           </div>
         `,
@@ -377,8 +434,11 @@ const app = {
         popupAnchor: popupAnchor
       });
 
-      const marker = L.marker([finalLat, finalLng], { icon })
-        .addTo(this.map);
+      const marker = L.marker([finalLat, finalLng], {
+        icon,
+        zIndexOffset: isRead ? 0 : 1000,
+        riseOnHover: true
+      }).addTo(this.map);
 
       marker.pinId = pin.pin_id;
       marker.trueLat = lat;
@@ -389,6 +449,7 @@ const app = {
       // Click handler to open full post modal
       marker.on('click', () => {
         this.openPinModal(pin.pin_id);
+        setTimeout(() => this.refreshMarkerStyles(), 300);
       });
 
       // Add hover preview functionality
@@ -662,7 +723,8 @@ const app = {
 
   resolveImageUrl(url) {
     if (!url) return url;
-    return url.startsWith('/uploads/') ? `${API}${url}` : url;
+    const baseUrl = API.replace('/api', '');
+    return url.startsWith('/uploads/') ? `${baseUrl}${url}` : url;
   },
 
   async loadPins() {
@@ -670,7 +732,6 @@ const app = {
       const res = await axios.get(`${API}/pins`);
       this.pins = res.data;
       this.filteredPins = [...this.pins];
-      this.renderPins();
       this.updateStats();
 
       if (this.map) {
@@ -678,7 +739,6 @@ const app = {
       }
     } catch (err) {
       console.error('Failed to load pins:', err);
-      document.getElementById('pins-grid').innerHTML = '<div class="no-results"><i class="fas fa-exclamation-circle"></i><p>Failed to load pins. Make sure the server is running.</p></div>';
     }
   },
 
@@ -709,8 +769,10 @@ const app = {
       return;
     }
     const bgClasses = ['bg-1', 'bg-2', 'bg-3', 'bg-4', 'bg-5', 'bg-6'];
+    const unreadPins = this.filteredPins.filter(pin => !this.isPinRead(pin.pin_id));
+    const readPins = this.filteredPins.filter(pin => this.isPinRead(pin.pin_id));
 
-    grid.innerHTML = this.filteredPins.map((pin, index) => {
+    const renderCard = (pin, index) => {
       const bg = bgClasses[index % bgClasses.length];
       const initials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
       const hasImages = pin.image_urls && pin.image_urls.length > 0;
@@ -721,7 +783,7 @@ const app = {
         ? '' 
         : `<svg width="50" height="50" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
       return `
-      <div class="pin-card ${hasImages ? '' : 'pin-card-no-image'}" onclick="app.openPinModal(${pin.pin_id})">
+      <div class="pin-card ${hasImages ? '' : 'pin-card-no-image'} ${this.isPinRead(pin.pin_id) ? 'read' : 'unread'}" onclick="app.openPinModal(${pin.pin_id})">
         <div class="pin-img ${hasImages ? '' : bg}" style="${imgStyle}">
           ${imgContent}
           ${imgCounter}
@@ -739,12 +801,27 @@ const app = {
         </div>
       </div>
     `;
-    }).join('');
+    };
+
+    let html = unreadPins.map((pin, index) => renderCard(pin, index)).join('');
+    if (readPins.length) {
+      html += '<div class="viewed-pins-separator">Viewed Pins</div>';
+      html += readPins.map((pin, index) => renderCard(pin, index)).join('');
+    }
+
+    grid.innerHTML = html;
   },
 
   openPinModal(pinId) {
     const pin = this.pins.find(p => p.pin_id === pinId);
     if (!pin) return;
+    this.markPinAsRead(pinId);
+    document.querySelectorAll('.pin-card').forEach(card => {
+      if (card.getAttribute('onclick') && card.getAttribute('onclick').includes('app.openPinModal(' + pinId + ')')) {
+        card.classList.remove('unread');
+        card.classList.add('read');
+      }
+    });
     this.highlightPinOnMap(pinId);
     const overlay = document.getElementById('pin-modal-overlay');
     const content = document.getElementById('modal-pin-content');
@@ -752,12 +829,22 @@ const app = {
     let imgSection = '';
     if (hasImages) {
       const resolvedUrls = pin.image_urls.map(url => this.resolveImageUrl(url));
+      const isVideoUrl = (url) => url && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'));
       if (resolvedUrls.length === 1) {
-        imgSection = `<div class="modal-pin-image" onclick="app.openImageViewer('${resolvedUrls[0]}')" style="background-image: url('${resolvedUrls[0]}'); background-size: cover; background-position: center; height: 220px; border-radius: 14px; margin-bottom: 1.25rem; cursor: zoom-in; position: relative;"><div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; pointer-events:none;"><i class="fas fa-expand"></i> Click to expand</div></div>`;
+        if (isVideoUrl(resolvedUrls[0])) {
+          imgSection = `<div class="modal-pin-image" style="height: 260px; border-radius: 14px; margin-bottom: 1.25rem; overflow:hidden; position:relative;"><video controls playsinline src="${resolvedUrls[0]}" style="width:100%; height:100%; object-fit:cover;"></video></div>`;
+        } else {
+          imgSection = `<div class="modal-pin-image" onclick="app.openImageViewer('${resolvedUrls[0]}')" style="background-image: url('${resolvedUrls[0]}'); background-size: cover; background-position: center; height: 220px; border-radius: 14px; margin-bottom: 1.25rem; cursor: zoom-in; position: relative;"><div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; pointer-events:none;"><i class="fas fa-expand"></i> Click to expand</div></div>`;
+        }
       } else {
         imgSection = `
           <div class="modal-image-carousel" style="display:flex; gap:0.5rem; overflow-x:auto; margin-bottom:1.25rem; padding-bottom:0.5rem;">
-            ${resolvedUrls.map((url, i) => `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background-image:url('${url}'); background-size:cover; background-position:center; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${resolvedUrls.length}</span></div>`).join('')}
+            ${resolvedUrls.map((url, i) => {
+              if (isVideoUrl(url)) {
+                return `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background:#000; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><video onclick="event.stopPropagation()" src="${url}" controls playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover; border-radius:12px;"></video><div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;"><i class="fas fa-play-circle" style="font-size:2rem; color:rgba(255,255,255,0.9);"></i></div><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${resolvedUrls.length}</span></div>`;
+              }
+              return `<div onclick="app.openImageViewer('${url}')" style="flex-shrink:0; width:160px; height:120px; border-radius:12px; background-image:url('${url}'); background-size:cover; background-position:center; cursor:zoom-in; position:relative; border:2px solid var(--gray-200); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"><span style="position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,0.5); color:#fff; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${i+1}/${resolvedUrls.length}</span></div>`;
+            }).join('')}
           </div>
         `;
       }
@@ -783,14 +870,21 @@ const app = {
   },
 
   openImageViewer(imageUrl) {
+    const isVideoUrl = (url) => url && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'));
     const viewer = document.createElement('div');
     viewer.id = 'image-viewer-overlay';
     viewer.style.cssText = 'position:fixed; inset:0; background:rgba(12,22,44,0.92); z-index:100000; display:flex; align-items:center; justify-content:center; padding:2rem; cursor:zoom-out; animation: fadeIn 0.2s ease;';
     viewer.innerHTML = `
-      <img src="${imageUrl}" style="max-width:100%; max-height:90vh; object-fit:contain; border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4); cursor:default;" onclick="event.stopPropagation()">
-      <button onclick="document.getElementById('image-viewer-overlay').remove(); event.stopPropagation();" style="position:absolute; top:20px; right:20px; width:44px; height:44px; border:none; border-radius:50%; background:rgba(255,255,255,0.15); color:#fff; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(10px);">&times;</button>
+      <div style="position:relative; max-width:100%; max-height:90vh; width:100%; display:flex; align-items:center; justify-content:center;">
+        ${isVideoUrl(imageUrl) ? `<video controls playsinline style="width:auto; max-width:100%; max-height:90vh; object-fit:contain; border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4); cursor:default;"><source src="${imageUrl}" type="video/${imageUrl.split('.').pop()}"></video>` : `<img src="${imageUrl}" style="width:100%; max-height:90vh; object-fit:contain; border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,0.4); cursor:default;">`}
+        <button onclick="document.getElementById('image-viewer-overlay').remove(); event.stopPropagation();" style="position:absolute; top:20px; right:20px; width:44px; height:44px; border:none; border-radius:50%; background:rgba(255,255,255,0.15); color:#fff; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(10px);">&times;</button>
+      </div>
     `;
-    viewer.onclick = () => viewer.remove();
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer) {
+        viewer.remove();
+      }
+    });
     document.addEventListener('keydown', function escClose(e) {
       if (e.key === 'Escape') {
         viewer.remove();
@@ -812,7 +906,6 @@ const app = {
       pin.title.toLowerCase().includes(search) ||
       pin.content.toLowerCase().includes(search)
     );
-    this.renderPins();
     if (this.map) this.addMarkers();
   },
 
@@ -823,19 +916,89 @@ const app = {
     } else {
       this.filteredPins = this.pins.filter(pin => pin.location_id == locationId);
     }
-    this.renderPins();
     if (this.map) this.addMarkers();
   },
 
   updateStats() {
-    const statsDiv = document.getElementById('stats');
-    const pinsWithCoords = this.pins.filter(p => p.latitude && p.longitude).length;
+    // Stats bar removed - page now shows only the map
+  },
 
-    statsDiv.innerHTML = `
-      <div class="stat-pill"><strong>${this.pins.length}</strong> total pins</div>
-      <div class="stat-pill"><strong>${this.locations.length}</strong> campus locations</div>
-      <div class="stat-pill"><strong>${pinsWithCoords}</strong> pinned on map</div>
-    `;
+  async loadPinsGrid() {
+    const grid = document.getElementById('pins-grid');
+    if (!grid) return;
+    grid.innerHTML = '<p style="color:var(--gray-400);padding:2rem;grid-column:1/-1;">Loading pins...</p>';
+    try {
+      const res = await axios.get(`${API}/pins`);
+      this.allPins = res.data;
+      this.renderPinsGrid(this.allPins);
+    } catch (err) {
+      grid.innerHTML = '<p style="color:var(--danger);padding:2rem;grid-column:1/-1;">Failed to load pins.</p>';
+    }
+  },
+
+  renderPinsGrid(pins) {
+    const grid = document.getElementById('pins-grid');
+    const stats = document.getElementById('stats-bar');
+    if (stats) stats.innerHTML = `<div class="stat-pill">Total pins: <strong>${pins.length}</strong></div>`;
+    if (!pins.length) {
+      grid.innerHTML = '<div class="no-results"><p>No public pins yet. Be the first to create one!</p></div>';
+      return;
+    }
+    const bgClasses = ['bg-1','bg-2','bg-3','bg-4','bg-5','bg-6'];
+    const unreadPins = pins.filter(pin => !this.isPinRead(pin.pin_id));
+    const readPins = pins.filter(pin => this.isPinRead(pin.pin_id));
+
+    const renderCard = (p, index) => {
+      const initials = p.author ? p.author.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'U';
+      const bg = bgClasses[index % bgClasses.length];
+      let images = p.image_urls || [];
+      if (!Array.isArray(images)) images = [];
+      const hasImage = images.length > 0;
+      const firstImage = hasImage ? this.resolveImageUrl(images[0]) : '';
+      const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'));
+      const isFirstVideo = isVideo(firstImage);
+      const imgStyle = hasImage && !isFirstVideo ? `background-image: url('${firstImage}'); background-size: cover; background-position: center;` : '';
+      const imgContent = hasImage
+        ? (isFirstVideo ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3);"><i class="fas fa-play-circle" style="font-size:2.5rem; color:rgba(255,255,255,0.9);"></i></div>` : (images.length > 1 ? `<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;"><i class="fas fa-images"></i> ${images.length}</div>` : ''))
+        : `<svg width="60" height="60" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+      return `
+        <div class="pin-card ${this.isPinRead(p.pin_id) ? 'read' : 'unread'}" onclick="app.openPinModal(${p.pin_id})" style="animation-delay: ${index * 0.05}s">
+          <div class="pin-img ${hasImage && !isFirstVideo ? '' : bg}" style="${imgStyle}">
+            ${imgContent}
+            <div class="pin-loc-badge">${p.location_name || 'Campus'}</div>
+          </div>
+          <div class="pin-body">
+            <div class="pin-meta">
+              <div class="pin-avatar">${initials}</div>
+              <div class="pin-author">${p.author || 'Anonymous'}</div>
+              <div class="pin-date">${p.created_at ? String(p.created_at).slice(0,10) : ''}</div>
+            </div>
+            <div class="pin-title">${p.title}</div>
+            <div class="pin-story">${p.content}</div>
+          </div>
+          <div class="pin-footer">
+            <span class="category-tag tag-campus">Pin #${p.pin_id}</span>
+          </div>
+        </div>`;
+    };
+
+    let html = unreadPins.map((pin, index) => renderCard(pin, index)).join('');
+    if (readPins.length) {
+      html += '<div class="viewed-pins-separator">Viewed Pins</div>';
+      html += readPins.map((pin, index) => renderCard(pin, index)).join('');
+    }
+
+    grid.innerHTML = html;
+  },
+
+  filterPinsGrid() {
+    const search = (document.getElementById('search-input-pins') || {}).value || '';
+    const filtered = this.allPins.filter(p =>
+      !search ||
+      (p.title && p.title.toLowerCase().includes(search.toLowerCase())) ||
+      (p.content && p.content.toLowerCase().includes(search.toLowerCase()))
+    );
+    this.renderPinsGrid(filtered);
   },
 
   /* ── MULTIPLE IMAGE UPLOAD ── */
@@ -848,25 +1011,33 @@ const app = {
   },
 
   handleFile(file) {
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (JPEG, PNG, WEBP).');
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) {
+      alert('Please select a supported file: JPEG, PNG, WEBP, MP4, WEBM, or MOV.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB.');
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File size must be less than 50MB.');
       return;
     }
 
     const tempId = 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      this.addImagePreview(tempId, e.target.result, null, true);
-    };
-    reader.readAsDataURL(file);
+    if (isImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.addImagePreview(tempId, e.target.result, null, true, false);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const objectUrl = URL.createObjectURL(file);
+      this.addImagePreview(tempId, objectUrl, null, true, true);
+    }
+    file.previewType = isVideo ? 'video' : 'image';
     this.uploadImageToServer(file, tempId);
   },
 
-  addImagePreview(id, src, url, isUploading) {
+  addImagePreview(id, src, url, isUploading, isVideo) {
     const grid = document.getElementById('images-preview-grid');
     const placeholder = document.getElementById('image-placeholder');
     placeholder.style.display = 'none';
@@ -874,9 +1045,11 @@ const app = {
 
     const div = document.createElement('div');
     div.id = id;
+    div.dataset.previewUrl = isVideo ? src : '';
     div.style.cssText = 'position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; border: 2px solid var(--gray-200);';
     div.innerHTML = `
-      <img src="${src}" style="width: 100%; height: 100%; object-fit: cover; ${isUploading ? 'opacity: 0.6;' : ''}">
+      ${isVideo ? `<video src="${src}" controls muted playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover; ${isUploading ? 'opacity: 0.6;' : ''}"></video>` : `<img src="${src}" style="width: 100%; height: 100%; object-fit: cover; ${isUploading ? 'opacity: 0.6;' : ''}">`}
+      ${isVideo ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;"><i class="fas fa-play-circle" style="font-size:2.2rem; color:rgba(255,255,255,0.9);"></i></div>' : ''}
       ${isUploading ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><div style="width:20px; height:20px; border:2px solid var(--gold); border-top-color:transparent; border-radius:50%; animation: spin 1s linear infinite;"></div></div>' : ''}
       <button type="button" onclick="app.removeImage('${id}')" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border:none; border-radius:50%; background:rgba(184,50,50,0.9); color:#fff; font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;"><i class="fas fa-times"></i></button>
     `;
@@ -894,7 +1067,8 @@ const app = {
 
       const div = document.getElementById(tempId);
       if (div) {
-        div.querySelector('img').style.opacity = '1';
+        const media = div.querySelector('img, video');
+        if (media) media.style.opacity = '1';
         const spinner = div.querySelector('div[style*="animation: spin"]');
         if (spinner) spinner.remove();
         div.dataset.url = res.data.url;
@@ -905,13 +1079,19 @@ const app = {
     } catch (err) {
       console.error('Image upload failed:', err);
       this.removeImage(tempId);
-      alert('Failed to upload image. Please try again.');
+      alert('Failed to upload file. Please try again.');
     }
   },
 
   removeImage(id) {
     const div = document.getElementById(id);
-    if (div) div.remove();
+    if (div) {
+      const previewUrl = div.dataset.previewUrl;
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      div.remove();
+    }
 
     this.uploadedImages = this.uploadedImages.filter(img => img.id !== id);
     this.updateImageUrlsInput();
@@ -1066,10 +1246,37 @@ const app = {
     this.showPage('explore');
   },
 
+  refreshMarkerStyles() {
+    this.markers.forEach(marker => {
+      const isRead = this.isPinRead(marker.pinId);
+      const el = marker.getElement();
+      if (el) {
+        const pinClass = marker.pin.image_urls && marker.pin.image_urls.length > 0 ? 'pin-with-photo' : 'pin-no-photo';
+        el.className = el.className.replace(/pin-read|pin-unread/g, '') + (isRead ? ' pin-read' : ' pin-unread');
+        const head = el.querySelector('.pin-head');
+        const pulse = el.querySelector('.pin-pulse');
+        const point = el.querySelector('.pin-point');
+        const icon_i = el.querySelector('.pin-head i');
+        if (isRead) {
+          if (head) { head.style.background = 'var(--gray-400)'; head.style.borderColor = 'var(--gray-600)'; }
+          if (pulse) pulse.style.background = 'rgba(158,156,158,0.2)';
+          if (point) { point.style.borderTopColor = 'var(--gray-400)'; point.style.opacity = '0.6'; }
+          if (icon_i) icon_i.style.color = 'var(--gray-600)';
+        } else {
+          if (head) { head.style.background = 'var(--navy)'; head.style.borderColor = 'var(--gold)'; }
+          if (pulse) pulse.style.background = 'rgba(245,200,66,0.4)';
+          if (point) { point.style.borderTopColor = 'var(--navy)'; point.style.opacity = '1'; }
+          if (icon_i) icon_i.style.color = 'var(--gold)';
+        }
+      }
+    });
+  },
+
   showPage(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`page-${page}`).classList.add('active');
+    const target = document.getElementById(`page-${page}`);
+    if (target) target.classList.add('active');
     const button = document.querySelector(`button[onclick="app.showPage('${page}')"]`);
     if (button) button.classList.add('active');
 
@@ -1081,6 +1288,9 @@ const app = {
       setTimeout(() => {
         if (this.map) this.map.invalidateSize();
       }, 100);
+    }
+    if (page === 'pins') {
+      this.loadPinsGrid();
     }
   }
 };
