@@ -14,7 +14,7 @@ load_dotenv()
 
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
 UPLOAD_FOLDER = os.path.join(frontend_path, 'uploads')
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mov'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, static_folder=frontend_path, static_url_path='/static')
@@ -79,6 +79,9 @@ def admin_required():
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
+def is_video_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'mp4', 'webm', 'mov'}
+
 @app.route('/api/upload', methods=['POST'])
 def upload_image():
     if 'file' not in request.files:
@@ -89,7 +92,7 @@ def upload_image():
         return jsonify({'error': 'No file selected'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Invalid image file type'}), 400
+        return jsonify({'error': 'Invalid file type. Supported types are PNG, JPG, JPEG, GIF, WEBP, MP4, WEBM, MOV.'}), 400
 
     filename = secure_filename(file.filename)
     name, ext = os.path.splitext(filename)
