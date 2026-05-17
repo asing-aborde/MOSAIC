@@ -748,7 +748,7 @@ const app = {
       const imgStyle = !isVideo && hasMedia ? `background-image: url('${firstUrl}'); background-size: cover; background-position: center;` : '';
 
       return `
-      <div class="pin-card ${hasMedia ? '' : 'pin-card-no-image'}" onclick="app.openPinModal(${pin.pin_id})">
+      <div class="pin-card ${hasMedia ? '' : 'pin-card-no-image'}" onclick="app.openPinModal(${pin.pin_id})" onmouseover="app.playPinVideo(this)" onmouseout="app.pausePinVideo(this)">
         <div class="pin-img ${hasMedia ? '' : bg}" style="${imgStyle}">
           ${mediaContent}
           ${mediaCounter}
@@ -1077,6 +1077,21 @@ const app = {
 
     this.uploadedVideo = null;
     this.updateMediaInputs();
+  },
+
+  playPinVideo(pinCardEl) {
+    const video = pinCardEl.querySelector('video.pin-video');
+    if (video) {
+      video.play().catch(err => console.log('Video play failed:', err));
+    }
+  },
+
+  pausePinVideo(pinCardEl) {
+    const video = pinCardEl.querySelector('video.pin-video');
+    if (video) {
+      video.pause();
+      video.currentTime = 0;
+    }
   },
 
   onVideoDrop(event) {
