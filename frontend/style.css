@@ -774,6 +774,20 @@ nav {
   gap: 1rem;
 }
 
+.viewed-pins-separator {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0 0;
+  color: var(--navy-dark);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-top: 2px solid rgba(245, 200, 66, 0.7);
+  background: rgba(245, 200, 66, 0.08);
+  border-radius: 12px;
+}
+
 .pin-card {
   margin: -4px;
 }
@@ -1247,6 +1261,36 @@ nav {
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 0.6; }
   50% { transform: scale(1.6); opacity: 0; }
+}
+
+.pin-unread .pin-head {
+  background: var(--gold) !important;
+  border-color: rgba(255,255,255,0.9) !important;
+}
+.pin-unread .pin-head i {
+  color: var(--navy) !important;
+}
+.pin-unread .pin-point {
+  border-top-color: var(--gold) !important;
+  opacity: 1 !important;
+}
+.pin-unread .pin-pulse {
+  background: rgba(245, 200, 66, 0.6) !important;
+}
+
+.pin-read .pin-head {
+  background: rgba(158, 156, 158, 0.85) !important;
+  border-color: var(--gray-600) !important;
+}
+.pin-read .pin-head i {
+  color: var(--gray-600) !important;
+}
+.pin-read .pin-point {
+  border-top-color: var(--gray-400) !important;
+  opacity: 0.6 !important;
+}
+.pin-read .pin-pulse {
+  background: rgba(158, 156, 158, 0.2) !important;
 }
 
 /* Pin styling based on image availability */
@@ -1852,10 +1896,12 @@ nav {
   border-color: var(--gold);
 }
 
-#images-preview-grid img {
+#images-preview-grid img,
+#images-preview-grid video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: auto;
 }
 
 /* Carousel in modal */
