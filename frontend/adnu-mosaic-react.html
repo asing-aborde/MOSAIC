@@ -736,8 +736,8 @@ const app = {
       let mediaCounter = '';
 
       if (isVideo) {
-        mediaContent = `<video class="pin-video" src="${firstUrl}" autoplay muted loop playsinline style="width:100%; height:100%; object-fit:cover; display:block;"></video>`;
-        mediaCounter = `<div class="pin-img-counter" style="background:rgba(0,0,0,0.6); color:#fff; padding:4px 8px; border-radius:4px;">Video</div>`;
+        mediaContent = `<video class="pin-video" src="${firstUrl}" muted playsinline style="width:100%; height:100%; object-fit:cover; display:block;" onmouseover="this.play()" onmouseout="this.pause(); this.currentTime=0;"></video>`;
+        mediaCounter = '';
       } else if (hasMedia) {
         mediaContent = '';
         mediaCounter = pin.image_urls.length > 1 ? `<div class="pin-img-counter">${pin.image_urls.length} photos</div>` : '';

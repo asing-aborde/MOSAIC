@@ -179,22 +179,32 @@ function renderPins(pins) {
     const initials = p.author ? p.author.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'U';
     const bg = bgClasses[i % bgClasses.length];
 
-    // Use image_urls array from API (already parsed from JSON)
+    // Use image_urls array and media_type from API
     let images = p.image_urls || [];
     if (!Array.isArray(images)) images = [];
-    const hasImage = images.length > 0;
-    const firstImage = hasImage ? resolveImageUrl(images[0]) : '';
-    const isVideo = (url) => url && (url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov'));
-    const isFirstVideo = isVideo(firstImage);
-    const imgStyle = hasImage && !isFirstVideo ? `background-image: url('${firstImage}'); background-size: cover; background-position: center;` : '';
-    const imgContent = hasImage
-      ? (isFirstVideo ? `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3);"><i class="fas fa-play-circle" style="font-size:2.5rem; color:rgba(255,255,255,0.9);"></i></div>` : (images.length > 1 ? `<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;"><i class="fas fa-images"></i> ${images.length}</div>` : ''))
-      : `<svg width="60" height="60" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+    const hasMedia = images.length > 0;
+    const isVideo = p.media_type === 'video' && hasMedia;
+    const firstUrl = hasMedia ? resolveImageUrl(images[0]) : '';
+
+    let mediaContent = '';
+    let mediaCounter = '';
+    let imgStyle = '';
+
+    if (isVideo) {
+      mediaContent = `<video class="pin-video" src="${firstUrl}" muted playsinline style="width:100%; height:100%; object-fit:cover; display:block;" onmouseover="this.play()" onmouseout="this.pause(); this.currentTime=0;"></video>`;
+      mediaCounter = '';
+    } else if (hasMedia) {
+      imgStyle = `background-image: url('${firstUrl}'); background-size: cover; background-position: center;`;
+      mediaCounter = images.length > 1 ? `<div style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;"><i class="fas fa-images"></i> ${images.length}</div>` : '';
+    } else {
+      mediaContent = `<svg width="60" height="60" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+    }
 
     return `
       <div class="pin-card ${isPinRead(p.pin_id) ? 'read' : 'unread'}" onclick="openPinModal(${p.pin_id})" style="animation-delay: ${i * 0.05}s">
-        <div class="pin-img ${hasImage && !isFirstVideo ? '' : bg}" style="${imgStyle}">
-          ${imgContent}
+        <div class="pin-img ${hasMedia ? '' : bg}" style="${imgStyle}">
+          ${mediaContent}
+          ${mediaCounter}
           <div class="pin-loc-badge">${p.location_name || 'Campus'}</div>
         </div>
         <div class="pin-body">
