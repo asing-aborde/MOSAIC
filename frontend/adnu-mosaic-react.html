@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="style.css">
 <style>
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
@@ -30,7 +31,7 @@
 <div id="page-explore" class="page active">
   <div class="explore-container">
     <div class="explore-header">
-      <h1>Map</h1>
+      <h1>Pin Map of AdNU</h1>
       <p>Discover and explore pins across Ateneo de Naga University</p>
     </div>
 
@@ -49,15 +50,24 @@
     </div>
 
     <div id="stats"></div>
-
-    <div id="pins-grid" class="pins-grid"></div>
   </div>
 </div>
 
 <!-- Create Pin Modal -->
 <div id="create-pin-overlay" class="modal-overlay" style="backdrop-filter: blur(12px); background: rgba(12, 22, 44, 0.55);" onclick="app.closeCreateModal(event)">
-  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="max-width: 1200px; max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
+  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="width: min(1400px, 95vw); max-width: 1400px; max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
     <button class="modal-close-btn" onclick="app.closeCreateModal(event)" style="z-index: 10;">&times;</button>
+
+    <!-- Full-screen upload progress overlay shown during video upload -->
+    <div id="upload-loading-overlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background: rgba(12,22,44,0.72); z-index: 9999;">
+      <div style="text-align:center; color:#fff; max-width:360px; width:90%;">
+        <div id="upload-loading-text" style="font-weight:700; font-size:1.05rem; margin-bottom:0.75rem;">Uploading 0%</div>
+        <div style="height:12px; background: rgba(255,255,255,0.12); border-radius: 8px; overflow:hidden; margin:0 auto 0.5rem;">
+          <div id="upload-loading-bar" style="width:0%; height:100%; background: var(--gold);"></div>
+        </div>
+        <div style="font-size:0.9rem; color: rgba(255,255,255,0.85);">Please wait while your video uploads. Do not close this window.</div>
+      </div>
+    </div>
 
     <!-- Left side: Form -->
     <div class="form-section" style="padding: 0; border: none; box-shadow: none; margin: 0; flex: 1; min-width: 0;">
@@ -93,11 +103,7 @@
         <input type="hidden" id="location-lat">
         <input type="hidden" id="location-lng">
 
-        <div class="form-group" id="location-preview" style="display: none;">
-          <label>Selected Location Preview</label>
-          <div id="mini-map"></div>
-          <p id="location-coords"></p>
-        </div>
+        <!-- Selected location preview removed -->
 
         <!-- Photo or Video Section -->
         <div class="form-group">
@@ -227,6 +233,42 @@ const app = {
   markers: [],
   locationLabels: [],
   campusPolygon: null,
+  // Read/unread tracking (stored in localStorage)
+  getReadPins() {
+    try { return JSON.parse(localStorage.getItem('read_pins') || '[]'); }
+    catch (e) { return []; }
+  },
+  markPinAsRead(pinId) {
+    const read = this.getReadPins();
+    const id = Number(pinId);
+    if (!read.includes(id) && !read.includes(String(pinId))) {
+      read.push(id);
+      localStorage.setItem('read_pins', JSON.stringify(read));
+    }
+  },
+  isPinRead(pinId) {
+    const read = this.getReadPins();
+    const id = Number(pinId);
+    return read.includes(id) || read.includes(String(pinId));
+  },
+
+  // Ray-casting point-in-polygon check. polygon is array of [lat, lng]
+  // Uses x=lng, y=lat for the algorithm.
+  pointInPolygon(lat, lng, polygon) {
+    if (!polygon || polygon.length === 0) return false;
+    const x = lng;
+    const y = lat;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      // polygon entries are [lat, lng]
+      const xi = polygon[i][1], yi = polygon[i][0]; // xi = vertex.x (lng), yi = vertex.y (lat)
+      const xj = polygon[j][1], yj = polygon[j][0];
+
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  },
 
   async init() {
     await this.loadLocations();
@@ -261,22 +303,18 @@ const app = {
       dashArray: '10, 8'
     }).addTo(this.map);
 
-    // Campus title label
-    L.marker([13.6324, 123.1845], {
-      icon: L.divIcon({
-        className: 'campus-label-container',
-        html: '<div class="campus-label">Ateneo de Naga University</div>',
-        iconSize: [220, 40],
-        iconAnchor: [110, 20]
-      }),
-      interactive: false,
-      zIndexOffset: -1000
-    }).addTo(this.map);
-
     // Add map double-click handler for creating pins
     this.map.on('dblclick', (e) => {
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
+      // Prevent opening create modal if outside campus polygon
+      if (!this.pointInPolygon(lat, lng, CAMPUS_POLYGON)) {
+        L.popup({ closeButton: false, autoClose: true, closeOnClick: true })
+          .setLatLng(e.latlng)
+          .setContent('Pins must be created inside the campus boundary.')
+          .openOn(this.map);
+        return;
+      }
       this.openCreateModalWithCoordinates(lat, lng);
     });
   },
@@ -377,8 +415,9 @@ const app = {
         pinClass = 'custom-pin-wrapper pin-no-photo';
       }
 
+      const isRead = this.isPinRead(pin.pin_id);
       const icon = L.divIcon({
-        className: pinClass,
+        className: pinClass + ' ' + (isRead ? 'pin-read' : 'pin-unread'),
         html: `
           <div class="custom-pin-icon">
             <div class="pin-pulse"></div>
@@ -391,8 +430,9 @@ const app = {
         iconAnchor: iconAnchor,
         popupAnchor: popupAnchor
       });
-
-      const marker = L.marker([finalLat, finalLng], { icon })
+      // unread pins should overlap read ones via higher zIndexOffset
+      const zOffset = isRead ? 0 : 2000;
+      const marker = L.marker([finalLat, finalLng], { icon, zIndexOffset: zOffset })
         .addTo(this.map);
 
       marker.pinId = pin.pin_id;
@@ -401,8 +441,18 @@ const app = {
       marker.pin = pin;
       marker.pinCount = pinCount;
 
-      // Click handler to open full post modal
+      // Click handler to open full post modal and mark as read
       marker.on('click', () => {
+        // mark read and update marker appearance
+        this.markPinAsRead(pin.pin_id);
+        // update zIndex and class
+        try {
+          const wasRead = this.isPinRead(pin.pin_id);
+          const newClass = pinClass + ' ' + (wasRead ? 'pin-read' : 'pin-unread');
+          const newIcon = L.divIcon({ className: newClass, html: icon.options.html, iconSize: icon.options.iconSize, iconAnchor: icon.options.iconAnchor, popupAnchor: icon.options.popupAnchor });
+          marker.setIcon(newIcon);
+          marker.setZIndexOffset(wasRead ? 0 : 2000);
+        } catch (e) { /* ignore */ }
         this.openPinModal(pin.pin_id);
       });
 
@@ -427,10 +477,14 @@ const app = {
 
   showPinPreview(marker, pin) {
     this.hidePinPreview();
-
+    // Detect whether this pin has a video preview
+    const isVideo = pin.media_type === 'video' && (pin.image_url || (pin.image_urls && pin.image_urls[0]));
     const hasImages = pin.image_urls && pin.image_urls.length > 0;
     const firstImage = hasImages ? this.resolveImageUrl(pin.image_urls[0]) : null;
-    const imageHtml = hasImages ? `<div style="width: 100%; height: 150px; background-image: url('${firstImage}'); background-size: cover; background-position: center; border-radius: 8px 8px 0 0;"></div>` : '';
+    const videoUrl = isVideo ? this.resolveImageUrl(pin.image_url || (pin.image_urls && pin.image_urls[0])) : null;
+    const imageHtml = isVideo
+      ? `<video class="pin-preview-video" src="${videoUrl}" muted playsinline preload="auto" style="width:100%; height:150px; object-fit:cover; border-radius: 8px 8px 0 0; display:block;"></video>`
+      : (hasImages ? `<div style="width: 100%; height: 150px; background-image: url('${firstImage}'); background-size: cover; background-position: center; border-radius: 8px 8px 0 0;"></div>` : '');
     const contentPreview = pin.content.substring(0, 100) + (pin.content.length > 100 ? '...' : '');
     const authorInitials = (pin.author || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -464,6 +518,23 @@ const app = {
       .setLatLng(marker.getLatLng())
       .setContent(tooltipHtml)
       .addTo(this.map);
+
+    // If preview contains a video, ensure it starts from the beginning and plays
+    if (isVideo) {
+      // Slight timeout to ensure DOM inserted by Leaflet
+      setTimeout(() => {
+        try {
+          const vid = document.querySelector('.pin-preview-popup video');
+          if (vid) {
+            vid.pause();
+            try { vid.currentTime = 0; } catch (e) { /* ignore seek errors */ }
+            vid.muted = true;
+            const p = vid.play();
+            if (p && p.catch) p.catch(() => {});
+          }
+        } catch (e) { /* ignore runtime errors */ }
+      }, 30);
+    }
   },
 
   hidePinPreview() {
@@ -499,13 +570,8 @@ const app = {
     const locationId = parseInt(select.value);
 
     if (!locationId) {
-      document.getElementById('location-preview').style.display = 'none';
       document.getElementById('location-lat').value = '';
       document.getElementById('location-lng').value = '';
-      if (this.miniMap) {
-        this.miniMap.remove();
-        this.miniMap = null;
-      }
       return;
     }
 
@@ -515,19 +581,11 @@ const app = {
     document.getElementById('location-lat').value = location.latitude || '';
     document.getElementById('location-lng').value = location.longitude || '';
 
-    const previewDiv = document.getElementById('location-preview');
-    previewDiv.style.display = 'block';
-
-    const coordsText = document.getElementById('location-coords');
-
     if (!location.latitude || !location.longitude) {
-      coordsText.innerHTML = `<span style="color: var(--danger);"><i class="fas fa-exclamation-triangle"></i> No coordinates available</span>`;
-      document.getElementById('mini-map').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--gray-400);font-size:0.85rem;"><i class="fas fa-map-marker-alt" style="margin-right:8px;"></i>No map preview available</div>';
+      document.getElementById('location-lat').value = '';
+      document.getElementById('location-lng').value = '';
       return;
     }
-
-    coordsText.textContent = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
-    this.initMiniMap(location.latitude, location.longitude, location.location_name);
   },
 
   mapPickerCoordinates: null,
@@ -622,48 +680,7 @@ const app = {
   },
 
   initMiniMap(lat, lng, name) {
-    const container = document.getElementById('mini-map');
-    container.innerHTML = '';
-
-    this.miniMap = L.map('mini-map', {
-      center: [lat, lng],
-      zoom: 19,
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false
-    });
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png', {
-      subdomains: 'abcd',
-      maxZoom: 19,
-      maxNativeZoom: 19
-    }).addTo(this.miniMap);
-
-    L.marker([lat, lng], {
-      icon: L.divIcon({
-        className: 'custom-pin-wrapper',
-        html: `
-          <div class="custom-pin-icon" style="transform:scale(0.75);">
-            <div class="pin-head"><i class="fas fa-map-pin"></i></div>
-            <div class="pin-point"></div>
-          </div>
-        `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 28]
-      })
-    }).addTo(this.miniMap).bindPopup(name).openPopup();
-
-    L.polygon(CAMPUS_POLYGON, {
-      color: 'rgba(245,200,66,0.95)',
-      weight: 1,
-      fillColor: '#f5c842',
-      fillOpacity: 0.08,
-      dashArray: '5, 5'
-    }).addTo(this.miniMap);
-
-    this.miniMap.invalidateSize();
+    // mini-map preview removed
   },
 
   async loadLocations() {
@@ -693,7 +710,8 @@ const app = {
       }
     } catch (err) {
       console.error('Failed to load pins:', err);
-      document.getElementById('pins-grid').innerHTML = '<div class="no-results"><i class="fas fa-exclamation-circle"></i><p>Failed to load pins. Make sure the server is running.</p></div>';
+      const grid = document.getElementById('pins-grid');
+      if (grid) grid.innerHTML = '<div class="no-results"><i class="fas fa-exclamation-circle"></i><p>Failed to load pins. Make sure the server is running.</p></div>';
     }
   },
 
@@ -719,6 +737,7 @@ const app = {
 
   renderPins() {
     const grid = document.getElementById('pins-grid');
+    if (!grid) return; // pins list removed from page; nothing to render
     if (!this.filteredPins.length) {
       grid.innerHTML = '<div class="no-results"><i class="fas fa-inbox"></i><p>No pins found. Create the first pin!</p></div>';
       return;
@@ -863,12 +882,10 @@ const app = {
 
   updateStats() {
     const statsDiv = document.getElementById('stats');
-    const pinsWithCoords = this.pins.filter(p => p.latitude && p.longitude).length;
-
+    // keep only total pins and campus locations; remove "pinned on map"
     statsDiv.innerHTML = `
       <div class="stat-pill"><strong>${this.pins.length}</strong> total pins</div>
       <div class="stat-pill"><strong>${this.locations.length}</strong> campus locations</div>
-      <div class="stat-pill"><strong>${pinsWithCoords}</strong> pinned on map</div>
     `;
   },
 
@@ -1024,7 +1041,8 @@ const app = {
 
       this.clearAllImages();
       const tempId = 'vid-' + Date.now();
-      this.addVideoPreview(tempId);
+      const blobUrl = URL.createObjectURL(file);
+      this.addVideoPreview(tempId, blobUrl);
       this.uploadVideoToServer(file, tempId);
     };
     videoEl.onerror = () => {
@@ -1033,37 +1051,89 @@ const app = {
     videoEl.src = URL.createObjectURL(file);
   },
 
-  addVideoPreview(id) {
+  addVideoPreview(id, blobUrl) {
     const preview = document.getElementById('video-preview');
     const placeholder = document.getElementById('video-placeholder');
     placeholder.style.display = 'none';
     preview.style.display = 'block';
 
-    const videoEl = document.getElementById('video-preview-element');
+    let videoEl = document.getElementById('video-preview-element');
+    if (!videoEl) {
+      videoEl = document.createElement('video');
+      videoEl.id = 'video-preview-element';
+      videoEl.style.width = '100%';
+      videoEl.style.maxWidth = '300px';
+      videoEl.style.borderRadius = '8px';
+      videoEl.style.background = '#000';
+      videoEl.controls = true;
+      preview.appendChild(videoEl);
+    }
     videoEl.id = id;
+    if (blobUrl) {
+      try { videoEl.src = blobUrl; }
+      catch (e) { console.warn('Failed to set preview blob URL', e); }
+    }
   },
 
   async uploadVideoToServer(file, tempId) {
     const formData = new FormData();
     formData.append('file', file);
 
+    // show overlay and start at 0%
+    if (this.showUploadProgress) this.showUploadProgress(0);
+
     try {
       const res = await axios.post(`${API}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          try {
+            const total = progressEvent.total || progressEvent.lengthComputable && progressEvent.total;
+            if (total) {
+              const percent = Math.round((progressEvent.loaded * 100) / total);
+              if (this.showUploadProgress) this.showUploadProgress(percent);
+            }
+          } catch (e) { /* ignore progress calc errors */ }
+        }
       });
 
-      const videoEl = document.getElementById(tempId);
+      let videoEl = document.getElementById(tempId);
+      if (!videoEl) videoEl = document.getElementById('video-preview-element');
       if (videoEl) {
-        videoEl.src = res.data.url;
+        try { videoEl.src = res.data.url; }
+        catch (e) { console.warn('Failed to set video src on preview element', e); }
       }
 
       this.uploadedVideo = { id: tempId, url: res.data.url, media_type: res.data.media_type };
       this.updateMediaInputs();
+
+      if (this.showUploadProgress) this.showUploadProgress(100);
+      setTimeout(() => { if (this.hideUploadProgress) this.hideUploadProgress(); }, 600);
     } catch (err) {
       console.error('Video upload failed:', err);
+      if (this.hideUploadProgress) this.hideUploadProgress();
       this.clearVideo();
       alert('Failed to upload video. Please try again.');
     }
+  },
+
+  showUploadProgress(percent) {
+    const overlay = document.getElementById('upload-loading-overlay');
+    const text = document.getElementById('upload-loading-text');
+    const bar = document.getElementById('upload-loading-bar');
+    if (!overlay || !text || !bar) return;
+    overlay.style.display = 'flex';
+    text.textContent = `Uploading ${percent}%`;
+    bar.style.width = `${percent}%`;
+  },
+
+  hideUploadProgress() {
+    const overlay = document.getElementById('upload-loading-overlay');
+    const text = document.getElementById('upload-loading-text');
+    const bar = document.getElementById('upload-loading-bar');
+    if (!overlay || !text || !bar) return;
+    overlay.style.display = 'none';
+    text.textContent = 'Uploading 0%';
+    bar.style.width = '0%';
   },
 
   clearVideo() {
@@ -1073,7 +1143,7 @@ const app = {
 
     preview.style.display = 'none';
     placeholder.style.display = 'flex';
-    videoEl.src = '';
+    if (videoEl) videoEl.src = '';
 
     this.uploadedVideo = null;
     this.updateMediaInputs();
@@ -1120,16 +1190,11 @@ const app = {
     document.getElementById('pin-form').reset();
     document.getElementById('error-msg').classList.remove('show');
     document.getElementById('success-msg').classList.remove('show');
-    document.getElementById('location-preview').style.display = 'none';
     document.getElementById('location-lat').value = '';
     document.getElementById('location-lng').value = '';
     document.getElementById('map-picker-coords-text').textContent = 'None';
     this.clearAllImages();
     this.clearVideo();
-    if (this.miniMap) {
-      this.miniMap.remove();
-      this.miniMap = null;
-    }
     this.closeMapPicker();
   },
 
@@ -1144,6 +1209,14 @@ const app = {
 
       if (!lat || !lng) {
         throw new Error('Please select a location by choosing from the dropdown or using the map picker.');
+      }
+
+      // Enforce campus boundary: disallow pins outside the yellow polygon
+      if (!this.pointInPolygon(lat, lng, CAMPUS_POLYGON)) {
+        document.getElementById('error-msg').textContent = 'Pins must be located within the campus boundary.';
+        document.getElementById('error-msg').classList.add('show');
+        btn.classList.remove('loading');
+        return;
       }
 
       const locationSelect = document.getElementById('location-name');
@@ -1163,6 +1236,14 @@ const app = {
       const imageUrls = imageUrlsJson ? JSON.parse(imageUrlsJson) : [];
       const videoUrl = document.getElementById('video-url').value;
       const mediaType = document.getElementById('media-type').value;
+
+      // If user selected video but upload hasn't finished yet, block submission
+      if (mediaType === 'video' && (!videoUrl || String(videoUrl).trim() === '')) {
+        document.getElementById('error-msg').textContent = 'Please wait for the video upload to finish before sharing.';
+        document.getElementById('error-msg').classList.add('show');
+        btn.classList.remove('loading');
+        return;
+      }
 
       const data = {
         author: author,

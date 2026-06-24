@@ -6,6 +6,7 @@
 <title>AdNU Mosaic</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -175,7 +176,13 @@ function renderPins(pins) {
     grid.innerHTML = '<div class="no-results"><p>No public pins yet. Be the first to create one!</p></div>';
     return;
   }
-  grid.innerHTML = pins.map((p, i) => {
+  const sortedPins = [...pins].sort((a, b) => {
+    const aRead = isPinRead(a.pin_id);
+    const bRead = isPinRead(b.pin_id);
+    if (aRead === bRead) return 0;
+    return aRead ? 1 : -1;
+  });
+  grid.innerHTML = sortedPins.map((p, i) => {
     const initials = p.author ? p.author.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'U';
     const bg = bgClasses[i % bgClasses.length];
 
