@@ -43,6 +43,9 @@
       <select id="location-filter" class="filter-select" onchange="app.filterByLocation()">
         <option value="">All Locations</option>
       </select>
+      <select id="category-filter" class="filter-select" onchange="app.applyFilters()">
+        <option value="">All Categories</option>
+      </select>
     </div>
 
     <div class="map-container map-container-bordered">
@@ -97,6 +100,56 @@
           <select id="location-name" onchange="app.onLocationChange()" required>
             <option value="">Select a building or location...</option>
           </select>
+        </div>
+
+        <div class="form-group" id="category-options">
+          <label>Categories <span>(select one or more)</span></label>
+          <div class="category-chips" style="margin-top:8px;">
+            <input type="checkbox" id="cat-love" name="category" value="love">
+            <label for="cat-love" class="category-chip">❤️ <span class="chip-label">Love &amp; Relationships</span></label>
+
+            <input type="checkbox" id="cat-funny" name="category" value="funny">
+            <label for="cat-funny" class="category-chip">😂 <span class="chip-label">Funny</span></label>
+
+            <input type="checkbox" id="cat-travel" name="category" value="travel">
+            <label for="cat-travel" class="category-chip">🌍 <span class="chip-label">Travel</span></label>
+
+            <input type="checkbox" id="cat-life" name="category" value="life">
+            <label for="cat-life" class="category-chip">🎒 <span class="chip-label">Life</span></label>
+
+            <input type="checkbox" id="cat-adventure" name="category" value="adventure">
+            <label for="cat-adventure" class="category-chip">😱 <span class="chip-label">Adventure</span></label>
+
+            <input type="checkbox" id="cat-creepy" name="category" value="creepy">
+            <label for="cat-creepy" class="category-chip">👻 <span class="chip-label">Creepy &amp; Unexplained</span></label>
+
+            <input type="checkbox" id="cat-hard_times" name="category" value="hard_times">
+            <label for="cat-hard_times" class="category-chip">💔 <span class="chip-label">Hard Times</span></label>
+
+            <input type="checkbox" id="cat-inspiration" name="category" value="inspiration">
+            <label for="cat-inspiration" class="category-chip">🌱 <span class="chip-label">Inspiration</span></label>
+
+            <input type="checkbox" id="cat-mystery" name="category" value="mystery">
+            <label for="cat-mystery" class="category-chip">🕵️ <span class="chip-label">Mystery &amp; Crime</span></label>
+
+            <input type="checkbox" id="cat-history" name="category" value="history">
+            <label for="cat-history" class="category-chip">🏛️ <span class="chip-label">History &amp; Culture</span></label>
+
+            <input type="checkbox" id="cat-food" name="category" value="food">
+            <label for="cat-food" class="category-chip">🍽️ <span class="chip-label">Food &amp; Lifestyle</span></label>
+
+            <input type="checkbox" id="cat-work" name="category" value="work">
+            <label for="cat-work" class="category-chip">💼 <span class="chip-label">Work &amp; School</span></label>
+
+            <input type="checkbox" id="cat-internet" name="category" value="internet">
+            <label for="cat-internet" class="category-chip">💻 <span class="chip-label">Internet &amp; Gaming</span></label>
+
+            <input type="checkbox" id="cat-nature" name="category" value="nature">
+            <label for="cat-nature" class="category-chip">🌿 <span class="chip-label">Nature</span></label>
+
+            <input type="checkbox" id="cat-arts" name="category" value="arts">
+            <label for="cat-arts" class="category-chip">🎨 <span class="chip-label">Arts &amp; Creativity</span></label>
+          </div>
         </div>
 
         <input type="hidden" id="location-lat">
@@ -270,6 +323,66 @@ const app = {
     this.addMarkers();
   },
 
+  // categories definition (key -> emoji + label)
+  categoriesMap: {
+    love: { emoji: '❤️', label: 'Love & Relationships' },
+    funny: { emoji: '😂', label: 'Funny' },
+    travel: { emoji: '🌍', label: 'Travel' },
+    life: { emoji: '🎒', label: 'Life' },
+    adventure: { emoji: '😱', label: 'Adventure' },
+    creepy: { emoji: '👻', label: 'Creepy & Unexplained' },
+    hard_times: { emoji: '💔', label: 'Hard Times' },
+    inspiration: { emoji: '🌱', label: 'Inspiration' },
+    mystery: { emoji: '🕵️', label: 'Mystery & Crime' },
+    history: { emoji: '🏛️', label: 'History & Culture' },
+    food: { emoji: '🍽️', label: 'Food & Lifestyle' },
+    work: { emoji: '💼', label: 'Work & School' },
+    internet: { emoji: '💻', label: 'Internet & Gaming' },
+    nature: { emoji: '🌿', label: 'Nature' },
+    arts: { emoji: '🎨', label: 'Arts & Creativity' }
+  },
+
+  renderCategoryBadges(categories) {
+    if (!categories) return '';
+    // accept comma-separated string or array
+    let arr = [];
+    if (Array.isArray(categories)) arr = categories;
+    else if (typeof categories === 'string') arr = categories.split(',').map(s => s.trim()).filter(Boolean);
+    if (!arr.length) return '';
+    return arr.map(cat => {
+      const info = this.categoriesMap[cat] || { emoji: '', label: cat };
+      return `<span class="category-tag" title="${info.label}" style="margin-left:6px;">${info.emoji} ${info.label}</span>`;
+    }).join('');
+  },
+
+  sortPinsDescending(pins) {
+    if (!Array.isArray(pins)) return [];
+    return pins.slice().sort((a, b) => {
+      const aTime = a?.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b?.created_at ? new Date(b.created_at).getTime() : 0;
+      if (bTime === aTime) {
+        return (b.pin_id || 0) - (a.pin_id || 0);
+      }
+      return bTime - aTime;
+    });
+  },
+
+    // color mapping per location (client-side fallback)
+    locationColors: {},
+
+    getLocationColor(locationId) {
+      return this.locationColors[locationId] || null;
+    },
+    hexToRgba(hex, alpha = 1) {
+      if (!hex) return null;
+      const h = hex.replace('#','');
+      const bigint = parseInt(h, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    },
+
   initMap() {
     this.map = L.map('campus-map', {
       center: ADNU_CENTER,
@@ -408,13 +521,20 @@ const app = {
       }
 
       const isRead = this.isPinRead(pin.pin_id);
+      const locColor = this.getLocationColor(pin.location_id) || '#1a2e5a';
+      const headBg = isRead ? 'rgba(158,156,158,0.85)' : locColor;
+      const headBorder = isRead ? 'var(--gray-600)' : '#ffffff';
+      const pointColor = isRead ? 'var(--gray-400)' : locColor;
+      const pulseColor = isRead ? 'rgba(158,156,158,0.2)' : this.hexToRgba(locColor, 0.45);
+      const iconIColor = isRead ? 'var(--gray-600)' : (hasImages ? 'var(--gold)' : '#ffffff');
+
       const icon = L.divIcon({
         className: pinClass + ' ' + (isRead ? 'pin-read' : 'pin-unread'),
         html: `
           <div class="custom-pin-icon">
-            <div class="pin-pulse"></div>
-            <div class="pin-head"><i class="fas fa-map-pin"></i></div>
-            <div class="pin-point"></div>
+            <div class="pin-pulse" style="background: ${pulseColor} !important;"></div>
+            <div class="pin-head" style="background: ${headBg} !important; border-color: ${headBorder} !important;"><i class="fas fa-map-pin" style="color: ${iconIColor} !important;"></i></div>
+            <div class="pin-point" style="border-top-color: ${pointColor} !important;"></div>
             ${pinIdBadge}
           </div>
         `,
@@ -543,6 +663,7 @@ const app = {
       <div class="map-popup-author">by ${pin.author || 'Anonymous'} &middot; ${new Date(pin.created_at).toLocaleDateString()}</div>
       <div class="map-popup-story">${pin.content.substring(0, 120)}${pin.content.length > 120 ? '...' : ''}</div>
       <div class="map-popup-badge">${pin.location_name || 'Campus'}</div>
+      <div style="margin-top:6px;">${this.renderCategoryBadges(pin.category)}</div>
     `;
   },
 
@@ -588,6 +709,13 @@ const app = {
     try {
       const res = await axios.get(`${API}/locations`);
       this.locations = res.data;
+      // assign a color per location from a fixed palette (client-side)
+      const palette = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf'];
+      this.locationColors = {};
+      this.locations.forEach((loc, i) => {
+        this.locationColors[loc.location_id] = palette[i % palette.length];
+      });
+      // colors assigned client-side; no legend will be shown
     } catch (err) {
       console.error('Failed to load locations:', err);
     }
@@ -601,7 +729,7 @@ const app = {
   async loadPins() {
     try {
       const res = await axios.get(`${API}/pins`);
-      this.pins = res.data;
+      this.pins = this.sortPinsDescending(res.data);
       this.filteredPins = [...this.pins];
       this.renderPins();
       this.updateStats();
@@ -619,6 +747,7 @@ const app = {
   populateLocationFilter() {
     const select = document.getElementById('location-name');
     const filterSelect = document.getElementById('location-filter');
+    const categoryFilter = document.getElementById('category-filter');
 
     while (select.options.length > 1) select.remove(1);
     while (filterSelect.options.length > 1) filterSelect.remove(1);
@@ -634,6 +763,19 @@ const app = {
       filterOption.textContent = loc.location_name;
       filterSelect.appendChild(filterOption);
     });
+
+    // Populate category filter from categoriesMap
+    if (categoryFilter) {
+      // remove existing except first
+      while (categoryFilter.options.length > 1) categoryFilter.remove(1);
+      Object.keys(this.categoriesMap).forEach(key => {
+        const info = this.categoriesMap[key];
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = `${info.emoji} ${info.label}`;
+        categoryFilter.appendChild(opt);
+      });
+    }
   },
 
   renderPins() {
@@ -681,7 +823,10 @@ const app = {
             <div class="pin-author">${pin.author || 'Anonymous'}</div>
             <div class="pin-date">${new Date(pin.created_at).toLocaleDateString()}</div>
           </div>
-          <div class="pin-title">${pin.title}</div>
+          <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.35rem;">
+            <div class="pin-title" style="margin:0;">${pin.title}</div>
+            <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">${this.renderCategoryBadges(pin.category)}</div>
+          </div>
           <div class="pin-content">${pin.content}</div>
         </div>
       </div>
@@ -730,6 +875,7 @@ const app = {
       </div>
       <div class="modal-pin-body">
         <div class="pin-location"><i class="fas fa-location-dot"></i>${pin.location_name || 'Campus'}</div>
+        <div style="margin-top:6px;">${this.renderCategoryBadges(pin.category)}</div>
         <p style="line-height:1.75; color:var(--gray-700); font-size:1rem; margin-top:0.75rem;">${pin.content}</p>
       </div>
     `;
@@ -760,23 +906,42 @@ const app = {
   },
 
   filterPins() {
-    const search = document.getElementById('search-input').value.toLowerCase();
-    this.filteredPins = this.pins.filter(pin =>
-      !search ||
-      pin.title.toLowerCase().includes(search) ||
-      pin.content.toLowerCase().includes(search)
-    );
-    this.renderPins();
-    if (this.map) this.addMarkers();
+    // kept for compatibility; delegate to combined filter
+    this.applyFilters();
   },
 
   filterByLocation() {
+    this.applyFilters();
+  },
+
+  applyFilters() {
+    const search = document.getElementById('search-input').value.toLowerCase();
     const locationId = document.getElementById('location-filter').value;
-    if (!locationId) {
-      this.filteredPins = [...this.pins];
-    } else {
-      this.filteredPins = this.pins.filter(pin => pin.location_id == locationId);
-    }
+    const category = document.getElementById('category-filter') ? document.getElementById('category-filter').value : '';
+
+    this.filteredPins = this.pins.filter(pin => {
+      // search filter
+      if (search) {
+        const s = search;
+        if (!((pin.title || '').toLowerCase().includes(s) || (pin.content || '').toLowerCase().includes(s))) return false;
+      }
+
+      // location filter
+      if (locationId) {
+        if (!(pin.location_id == locationId)) return false;
+      }
+
+      // category filter (pins store comma-separated categories)
+      if (category) {
+        if (!pin.category) return false;
+        const cats = String(pin.category).split(',').map(c => c.trim());
+        if (!cats.includes(category)) return false;
+      }
+
+      return true;
+    });
+
+    this.filteredPins = this.sortPinsDescending(this.filteredPins);
     this.renderPins();
     if (this.map) this.addMarkers();
   },
@@ -1144,6 +1309,10 @@ const app = {
       const data = {
         author: author,
         title: document.getElementById('title').value,
+        category: (function(){
+          const boxes = Array.from(document.querySelectorAll('#category-options input[type=checkbox]:checked'));
+          return boxes.map(b=>b.value).join(',') || null;
+        })(),
         content: document.getElementById('content').value,
         location_id: locationId || null,
         location_name: locationName,

@@ -158,7 +158,14 @@ async function loadPins() {
     const res  = await fetch('http://127.0.0.1:5000/api/pins');
     const data = await res.json();
     if (!res.ok) { grid.innerHTML = '<p style="color:var(--danger);padding:2rem;grid-column:1/-1;">Failed to load pins.</p>'; return; }
-    allPins = data;
+    allPins = [...data].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (bTime === aTime) {
+        return (b.pin_id || 0) - (a.pin_id || 0);
+      }
+      return bTime - aTime;
+    });
     renderPins(allPins);
   } catch (err) {
     grid.innerHTML = '<p style="color:var(--danger);padding:2rem;grid-column:1/-1;">Cannot reach server. Make sure Flask is running on port 5000.</p>';
@@ -177,10 +184,12 @@ function renderPins(pins) {
     return;
   }
   const sortedPins = [...pins].sort((a, b) => {
-    const aRead = isPinRead(a.pin_id);
-    const bRead = isPinRead(b.pin_id);
-    if (aRead === bRead) return 0;
-    return aRead ? 1 : -1;
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (bTime === aTime) {
+      return (b.pin_id || 0) - (a.pin_id || 0);
+    }
+    return bTime - aTime;
   });
   grid.innerHTML = sortedPins.map((p, i) => {
     const initials = p.author ? p.author.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'U';
