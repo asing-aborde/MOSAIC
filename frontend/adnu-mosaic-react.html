@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;1,400&family=Space+Grotesk:wght@700&family=DM+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="/static/style.css">
@@ -94,10 +94,9 @@
 
         <div class="form-group">
           <label for="location-name">Building / Location <span>(pin will appear here on map)</span></label>
-          <select id="location-name" onchange="app.onLocationChange()">
+          <select id="location-name" onchange="app.onLocationChange()" required>
             <option value="">Select a building or location...</option>
           </select>
-          <button type="button" class="btn btn-secondary" onclick="app.openMapPicker()" style="margin-top: 0.5rem; width: 100%;">Or click map to select location</button>
         </div>
 
         <input type="hidden" id="location-lat">
@@ -155,13 +154,6 @@
           <button type="submit" class="btn btn-primary" id="submit-btn" style="flex: 2;">Share Pin</button>
         </div>
       </form>
-    </div>
-
-    <!-- Right side: Map -->
-    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
-      <p style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--gray-600);">Click the location button below or click on the map to select coordinates</p>
-      <div id="map-picker-container" style="flex: 1; border-radius: 12px; overflow: hidden; border: 2px solid var(--gray-200); min-height: 400px; background: #f0f0f0;"></div>
-      <p id="map-picker-coords" style="color: var(--gray-700); font-size: 0.85rem; margin-top: 1rem; padding: 0.75rem; background: var(--gray-100); border-radius: 8px;">Selected: <span id="map-picker-coords-text" style="font-weight: 600; color: var(--gold);">None</span></p>
     </div>
   </div>
 </div>
@@ -586,97 +578,6 @@ const app = {
       document.getElementById('location-lng').value = '';
       return;
     }
-  },
-
-  mapPickerCoordinates: null,
-  mapPicker: null,
-  mapPickerMarker: null,
-
-  openMapPicker() {
-    this.initMapPicker();
-  },
-
-  initMapPicker() {
-    const container = document.getElementById('map-picker-container');
-    if (!container) return;
-
-    if (this.mapPicker) {
-      this.mapPicker.remove();
-    }
-
-    container.innerHTML = '';
-
-    this.mapPicker = L.map('map-picker-container', {
-      center: ADNU_CENTER,
-      zoom: DEFAULT_ZOOM,
-      maxBounds: CAMPUS_BOUNDS,
-      maxBoundsViscosity: 1.0,
-      minZoom: 16,
-      maxZoom: 19,
-      zoomControl: true,
-      attributionControl: true
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(this.mapPicker);
-
-    L.polygon(CAMPUS_POLYGON, {
-      color: 'rgba(245,200,66,0.95)',
-      weight: 3,
-      fillColor: '#f5c842',
-      fillOpacity: 0.12,
-      dashArray: '10, 8'
-    }).addTo(this.mapPicker);
-
-    this.mapPicker.on('click', (e) => {
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-      this.selectMapPickerLocation(lat, lng);
-    });
-
-    this.mapPicker.invalidateSize();
-  },
-
-  selectMapPickerLocation(lat, lng) {
-    if (this.mapPickerMarker) {
-      this.mapPicker.removeLayer(this.mapPickerMarker);
-    }
-
-    this.mapPickerCoordinates = { lat, lng };
-
-    const icon = L.divIcon({
-      className: 'custom-pin-wrapper pin-with-photo',
-      html: `
-        <div class="custom-pin-icon">
-          <div class="pin-pulse"></div>
-          <div class="pin-head"><i class="fas fa-map-pin"></i></div>
-          <div class="pin-point"></div>
-        </div>
-      `,
-      iconSize: [40, 48],
-      iconAnchor: [20, 48],
-      popupAnchor: [0, -48]
-    });
-
-    this.mapPickerMarker = L.marker([lat, lng], { icon })
-      .addTo(this.mapPicker)
-      .bindPopup(`<div style="text-align: center;"><strong>Selected Location</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}</div>`)
-      .openPopup();
-
-    document.getElementById('map-picker-coords-text').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    document.getElementById('location-lat').value = lat.toFixed(8);
-    document.getElementById('location-lng').value = lng.toFixed(8);
-  },
-
-  closeMapPicker() {
-    if (this.mapPicker) {
-      this.mapPicker.remove();
-      this.mapPicker = null;
-      this.mapPickerMarker = null;
-    }
-    this.mapPickerCoordinates = null;
   },
 
   initMiniMap(lat, lng, name) {
@@ -1178,9 +1079,6 @@ const app = {
   openCreateModal() {
     document.getElementById('create-pin-overlay').classList.add('visible');
     document.body.style.overflow = 'hidden';
-    setTimeout(() => {
-      this.initMapPicker();
-    }, 100);
   },
 
   closeCreateModal(event) {
@@ -1192,10 +1090,8 @@ const app = {
     document.getElementById('success-msg').classList.remove('show');
     document.getElementById('location-lat').value = '';
     document.getElementById('location-lng').value = '';
-    document.getElementById('map-picker-coords-text').textContent = 'None';
     this.clearAllImages();
     this.clearVideo();
-    this.closeMapPicker();
   },
 
   async createPin(event) {
@@ -1208,7 +1104,7 @@ const app = {
       const lng = parseFloat(document.getElementById('location-lng').value);
 
       if (!lat || !lng) {
-        throw new Error('Please select a location by choosing from the dropdown or using the map picker.');
+        throw new Error('Please select a location from the dropdown.');
       }
 
       // Enforce campus boundary: disallow pins outside the yellow polygon

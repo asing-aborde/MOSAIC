@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;1,400&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -60,7 +60,6 @@ body { background: #eef2f7; }
 <div class="auth-page active" id="login-screen">
   <div class="auth-card">
     <div class="auth-header">
-      <div class="auth-logo-circle">A</div>
       <div>
         <div class="auth-title">Admin Portal</div>
         <div class="auth-subtitle">Secure campus pin management</div>
@@ -519,17 +518,8 @@ async function deleteLocation(locationId) {
 }
 
 window.addEventListener('load', () => {
-  const isFirstLoad = !sessionStorage.getItem('admin_visited');
-  if (isFirstLoad) {
-    sessionStorage.setItem('admin_visited', 'true');
-    setTimeout(() => {
-      document.getElementById('loader').classList.add('hidden');
-      setTimeout(() => document.getElementById('loader').remove(), 300);
-    }, 800);
-  } else {
-    document.getElementById('loader').classList.add('hidden');
-    document.getElementById('loader').remove();
-  }
+  document.getElementById('loader').classList.add('hidden');
+  document.getElementById('loader').remove();
 
   if (localStorage.getItem('auth_token')) {
     loadDashboard();

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AdNU Mosaic</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;1,400&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -56,15 +56,15 @@
   <div class="loading-text">Ateneo Pickleball Club</div>
 </div>
 
-<nav>
-  <div class="nav-logo">AdNU <em style="color:var(--white);font-style:normal;">|</em> <span>Mosaic</span></div>
+<nav id="navbar">
+  <div class="nav-logo">AdNU <span>Mosaic</span></div>
   <div class="nav-center-links">
     <button type="button" class="nav-btn active" onclick="event.preventDefault(); showPage('pins')">Pins</button>
     <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='/map'">Pin Map</button>
     <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='/map'">Create Pin</button>
   </div>
   <div class="nav-right-links">
-    <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='admin'">Admin</button>
+    <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='admin.html'">Admin</button>
   </div>
 </nav>
 
