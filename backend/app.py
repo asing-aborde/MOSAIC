@@ -38,6 +38,127 @@ db_config = {
     'database': os.getenv('DB_NAME', 'adnu_mosaic')
 }
 
+SUPPORTED_REACTIONS = ['❤️', '😮', '😂', '😡', '👏']
+REACTION_LABELS = {
+    '❤️': 'Loved this',
+    '😮': 'Wow',
+    '😂': 'Funny',
+    '😡': 'Angry',
+    '👏': 'Inspiring'
+}
+DEFAULT_REACTION_COUNTS = {emoji: 0 for emoji in SUPPORTED_REACTIONS}
+reaction_memory_store = {}
+reaction_client_map = {}
+
+
+def remove_pin_reaction(pin_id, client_id):
+    pin_id = int(pin_id)
+    pin_reactions = reaction_client_map.get(pin_id, {})
+    if client_id not in pin_reactions:
+        return None
+
+    reaction = pin_reactions.pop(client_id)
+    current_counts = get_pin_reaction_counts(pin_id)
+    current_counts[reaction] = max(int(current_counts.get(reaction, 0)) - 1, 0)
+    save_pin_reaction_counts(pin_id, current_counts)
+    return reaction
+
+
+def normalize_reaction_counts(counts):
+    normalized = {emoji: 0 for emoji in SUPPORTED_REACTIONS}
+    if isinstance(counts, dict):
+        for emoji in SUPPORTED_REACTIONS:
+            try:
+                normalized[emoji] = int(counts.get(emoji, 0))
+            except (TypeError, ValueError):
+                normalized[emoji] = 0
+    return normalized
+
+
+def ensure_reactions_column(conn):
+    if not conn:
+        return False
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            'SELECT 1 FROM information_schema.columns WHERE table_schema = %s AND table_name = "pins" AND column_name = "reaction_counts"',
+            (db_config['database'],)
+        )
+        if cursor.fetchone():
+            return True
+
+        cursor.execute('ALTER TABLE pins ADD COLUMN reaction_counts JSON DEFAULT NULL')
+        conn.commit()
+        return True
+    except Error as e:
+        if getattr(e, 'errno', None) in {1054, 1060}:
+            return True
+        print(f"Reaction column check error: {e}")
+        return False
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+
+
+def get_pin_reaction_counts(pin_id):
+    pin_id = int(pin_id)
+    if pin_id in reaction_memory_store:
+        return dict(reaction_memory_store[pin_id])
+
+    conn = get_db_connection()
+    if not conn:
+        return dict(DEFAULT_REACTION_COUNTS)
+
+    try:
+        ensure_reactions_column(conn)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT reaction_counts FROM pins WHERE pin_id = %s', (pin_id,))
+        result = cursor.fetchone()
+        if result and result.get('reaction_counts'):
+            try:
+                return normalize_reaction_counts(json.loads(result['reaction_counts']))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return dict(DEFAULT_REACTION_COUNTS)
+    except Error as e:
+        print(f"Reaction load error: {e}")
+        return dict(DEFAULT_REACTION_COUNTS)
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def save_pin_reaction_counts(pin_id, counts):
+    pin_id = int(pin_id)
+    normalized = normalize_reaction_counts(counts)
+    reaction_memory_store[pin_id] = normalized
+
+    conn = get_db_connection()
+    if not conn:
+        return normalized
+
+    try:
+        ensure_reactions_column(conn)
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE pins SET reaction_counts = %s WHERE pin_id = %s',
+            (json.dumps(normalized), pin_id)
+        )
+        conn.commit()
+        return normalized
+    except Error as e:
+        print(f"Reaction save error: {e}")
+        return normalized
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 def get_db_connection():
     try:
         conn = mysql.connector.connect(**db_config)
@@ -273,6 +394,8 @@ def get_pins():
                     pin['image_urls'] = [pin['image_url']] if pin['image_url'] else []
             else:
                 pin['image_urls'] = []
+
+            pin['reaction_counts'] = get_pin_reaction_counts(pin['pin_id'])
         
         return jsonify(pins), 200
     except Error as e:
@@ -327,6 +450,8 @@ def get_admin_pins():
             else:
                 pin['image_urls'] = []
 
+            pin['reaction_counts'] = get_pin_reaction_counts(pin['pin_id'])
+
         return jsonify(pins), 200
     except Error as e:
         return jsonify({'error': str(e)}), 500
@@ -363,6 +488,8 @@ def get_pin(pin_id):
         else:
             pin['image_urls'] = []
 
+        pin['reaction_counts'] = get_pin_reaction_counts(pin['pin_id'])
+
         return jsonify(pin), 200
     except Error as e:
         return jsonify({'error': str(e)}), 500
@@ -396,10 +523,11 @@ def create_pin():
         else:
             stored_image = None
 
+        ensure_reactions_column(conn)
         cursor.execute(
             '''INSERT INTO pins (author, title, content, location_id, latitude, longitude,
-                                 location_name, category, visibility, image_url, media_type)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                                 location_name, category, visibility, image_url, media_type, reaction_counts)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
             (
                 data.get('author'),
                 data.get('title'),
@@ -411,7 +539,8 @@ def create_pin():
                 data.get('category', 'campus'),
                 data.get('visibility', 'public'),
                 stored_image,
-                data.get('media_type', 'image')
+                data.get('media_type', 'image'),
+                json.dumps(DEFAULT_REACTION_COUNTS)
             )
         )
         conn.commit()
@@ -423,6 +552,61 @@ def create_pin():
     finally:
         cursor.close()
         conn.close()
+
+@app.route('/api/pins/<int:pin_id>/reactions', methods=['GET', 'POST'])
+def handle_pin_reactions(pin_id):
+    client_id = request.args.get('client_id') or request.headers.get('X-Client-Id') or 'anonymous'
+    if request.method == 'GET':
+        pin_reactions = reaction_client_map.get(pin_id, {})
+        return jsonify({
+            'pin_id': pin_id,
+            'reaction_counts': get_pin_reaction_counts(pin_id),
+            'supported_reactions': SUPPORTED_REACTIONS,
+            'reaction_labels': REACTION_LABELS,
+            'user_reaction': pin_reactions.get(client_id)
+        }), 200
+
+    data = request.get_json(silent=True) or {}
+    reaction = data.get('reaction')
+    client_id = data.get('client_id') or request.headers.get('X-Client-Id') or 'anonymous'
+
+    if reaction not in SUPPORTED_REACTIONS:
+        return jsonify({'error': 'Unsupported reaction'}), 400
+
+    pin_reactions = reaction_client_map.setdefault(pin_id, {})
+    if client_id in pin_reactions:
+        if pin_reactions[client_id] == reaction:
+            removed_reaction = remove_pin_reaction(pin_id, client_id)
+            return jsonify({
+                'success': True,
+                'removed': True,
+                'reaction': removed_reaction,
+                'reaction_counts': get_pin_reaction_counts(pin_id),
+                'reaction_labels': REACTION_LABELS,
+                'user_reaction': None
+            }), 200
+
+        return jsonify({
+            'success': False,
+            'error': 'You already reacted to this pin',
+            'reaction_counts': get_pin_reaction_counts(pin_id),
+            'user_reaction': pin_reactions[client_id]
+        }), 409
+
+    pin_reactions[client_id] = reaction
+    current_counts = get_pin_reaction_counts(pin_id)
+    current_counts[reaction] = int(current_counts.get(reaction, 0)) + 1
+    updated_counts = save_pin_reaction_counts(pin_id, current_counts)
+
+    return jsonify({
+        'success': True,
+        'removed': False,
+        'pin_id': pin_id,
+        'reaction': reaction,
+        'reaction_counts': updated_counts,
+        'reaction_labels': REACTION_LABELS,
+        'user_reaction': reaction
+    }), 200
 
 @app.route('/api/pins/<int:pin_id>', methods=['PUT'])
 @jwt_required()
