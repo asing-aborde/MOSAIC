@@ -58,10 +58,10 @@
 
 <nav id="navbar">
   <div class="nav-logo">AdNU <span>Mosaic</span></div>
-  <div class="nav-center-links">
+    <div class="nav-center-links">
     <button type="button" class="nav-btn active" onclick="event.preventDefault(); showPage('pins')">Pins</button>
     <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='/map'">Pin Map</button>
-    <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='/map'">Create Pin</button>
+    <button type="button" class="nav-btn" onclick="event.preventDefault(); openCreateModal()">Create Pin</button>
   </div>
   <div class="nav-right-links">
     <button type="button" class="nav-btn" onclick="event.preventDefault(); window.location.href='admin.html'">Admin</button>
@@ -334,6 +334,69 @@ function closePinModal(event) {
   document.getElementById('pin-modal-overlay').classList.remove('visible');
 }
 
+/* Create Pin modal handlers for non-react page */
+function openCreateModal() {
+  const overlay = document.getElementById('create-pin-overlay');
+  if (!overlay) return;
+  overlay.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreateModal(event) {
+  if (event && event.target !== document.getElementById('create-pin-overlay') && event.target !== event.currentTarget) return;
+  const overlay = document.getElementById('create-pin-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+  const form = document.getElementById('pin-form');
+  if (form) form.reset();
+  const err = document.getElementById('error-msg');
+  if (err) { err.classList.remove('show'); err.textContent = ''; }
+  const success = document.getElementById('success-msg');
+  if (success) { success.classList.remove('show'); }
+}
+
+async function createPin(event) {
+  event.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  if (btn) btn.classList.add('loading');
+
+  try {
+    const author = document.getElementById('author').value.trim();
+    const title = document.getElementById('title').value;
+    const content = document.getElementById('content').value;
+
+    const categoryBoxes = Array.from(document.querySelectorAll('#category-options input[type=checkbox]:checked'));
+    const category = categoryBoxes.map(b => b.value).join(',') || null;
+
+    const data = {
+      author: author,
+      title: title,
+      category: category,
+      content: content,
+      visibility: 'public',
+      image_urls: [],
+      image_url: null,
+      media_type: 'image'
+    };
+
+    const res = await fetch('/api/pins', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Failed to create pin');
+    }
+
+    closeCreateModal();
+    await loadPins();
+    showPage('pins');
+  } catch (err) {
+    const e = document.getElementById('error-msg');
+    if (e) { e.classList.add('show'); e.textContent = err.response?.data?.error || err.message || 'Error creating pin'; }
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
 function openImageViewer(imageUrl) {
   const viewer = document.createElement('div');
   viewer.id = 'image-viewer-overlay';
@@ -360,5 +423,103 @@ function openImageViewer(imageUrl) {
     <div id="modal-pin-content"></div>
   </div>
 </div>
+
+<!-- Create Pin Modal (mirrors react modal markup) -->
+<div id="create-pin-overlay" class="modal-overlay" style="backdrop-filter: blur(12px); background: rgba(12, 22, 44, 0.55);" onclick="closeCreateModal(event)">
+  <div class="pin-modal create-modal" onclick="event.stopPropagation()" style="width: min(1400px, 95vw); max-width: 1400px; max-height: 90vh; overflow-y: auto; display: flex; gap: 2rem;">
+    <button class="modal-close-btn" onclick="closeCreateModal(event)" style="z-index: 10;">&times;</button>
+
+    <div class="form-section" style="padding: 0; border: none; box-shadow: none; margin: 0; flex: 1; min-width: 0;">
+      <h2 style="margin-bottom: 1.5rem; padding-right: 40px;">Share Your Pin</h2>
+
+      <div class="success-message" id="success-msg">Your pin has been created successfully!</div>
+      <div class="alert alert-danger" id="error-msg"></div>
+
+      <form id="pin-form" onsubmit="createPin(event)">
+        <div class="form-group">
+          <label for="author">Your Name <span>(optional)</span></label>
+          <input type="text" id="author" placeholder="Enter your name">
+        </div>
+
+        <div class="form-group">
+          <label for="title">Pin Title</label>
+          <input type="text" id="title" placeholder="Give your pin a title" required>
+        </div>
+
+        <div class="form-group">
+          <label for="content">Your Story</label>
+          <textarea id="content" placeholder="Share your campus pin story in detail..." required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="location-name">Building / Location <span>(pin will appear here on map)</span></label>
+          <select id="location-name" onchange="/* no-op for non-map page */" required>
+            <option value="">Select a building or location...</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="category-options">
+          <label>Categories <span>(select one or more)</span></label>
+          <div class="category-chips" style="margin-top:8px;">
+            <input type="checkbox" id="cat-love" name="category" value="love">
+            <label for="cat-love" class="category-chip">❤️ <span class="chip-label">Love &amp; Relationships</span></label>
+
+            <input type="checkbox" id="cat-funny" name="category" value="funny">
+            <label for="cat-funny" class="category-chip">😂 <span class="chip-label">Funny</span></label>
+
+            <input type="checkbox" id="cat-travel" name="category" value="travel">
+            <label for="cat-travel" class="category-chip">🌍 <span class="chip-label">Travel</span></label>
+
+            <input type="checkbox" id="cat-life" name="category" value="life">
+            <label for="cat-life" class="category-chip">🎒 <span class="chip-label">Life</span></label>
+
+            <input type="checkbox" id="cat-adventure" name="category" value="adventure">
+            <label for="cat-adventure" class="category-chip">😱 <span class="chip-label">Adventure</span></label>
+
+            <input type="checkbox" id="cat-creepy" name="category" value="creepy">
+            <label for="cat-creepy" class="category-chip">👻 <span class="chip-label">Creepy &amp; Unexplained</span></label>
+
+            <input type="checkbox" id="cat-hard_times" name="category" value="hard_times">
+            <label for="cat-hard_times" class="category-chip">💔 <span class="chip-label">Hard Times</span></label>
+
+            <input type="checkbox" id="cat-inspiration" name="category" value="inspiration">
+            <label for="cat-inspiration" class="category-chip">🌱 <span class="chip-label">Inspiration</span></label>
+
+            <input type="checkbox" id="cat-mystery" name="category" value="mystery">
+            <label for="cat-mystery" class="category-chip">🕵️ <span class="chip-label">Mystery &amp; Crime</span></label>
+
+            <input type="checkbox" id="cat-history" name="category" value="history">
+            <label for="cat-history" class="category-chip">🏛️ <span class="chip-label">History &amp; Culture</span></label>
+
+            <input type="checkbox" id="cat-food" name="category" value="food">
+            <label for="cat-food" class="category-chip">🍽️ <span class="chip-label">Food &amp; Lifestyle</span></label>
+
+            <input type="checkbox" id="cat-work" name="category" value="work">
+            <label for="cat-work" class="category-chip">💼 <span class="chip-label">Work &amp; School</span></label>
+
+            <input type="checkbox" id="cat-internet" name="category" value="internet">
+            <label for="cat-internet" class="category-chip">💻 <span class="chip-label">Internet &amp; Gaming</span></label>
+
+            <input type="checkbox" id="cat-nature" name="category" value="nature">
+            <label for="cat-nature" class="category-chip">🌿 <span class="chip-label">Nature</span></label>
+
+            <input type="checkbox" id="cat-arts" name="category" value="arts">
+            <label for="cat-arts" class="category-chip">🎨 <span class="chip-label">Arts &amp; Creativity</span></label>
+          </div>
+        </div>
+
+        <input type="hidden" id="location-lat">
+        <input type="hidden" id="location-lng">
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeCreateModal()" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submit-btn" style="flex: 2;">Share Pin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+</html>
 </body>
 </html>
