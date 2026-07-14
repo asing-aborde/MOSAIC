@@ -100,6 +100,8 @@ function resolveImageUrl(url) {
 
 let allPins = [];
 let locations = [];
+let uploadedImages = [];
+let uploadedVideo = null;
 
 /* ── Page routing ── */
 function showPage(page) {
@@ -322,6 +324,286 @@ function onLocationChange() {
   document.getElementById('location-lng').value = location.longitude || '';
 }
 
+/* ── MEDIA UPLOAD HELPERS ── */
+function onImageSelected(event) {
+  const files = Array.from(event.target.files || []);
+  files.forEach(file => handleFile(file));
+  event.target.value = '';
+}
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file (JPEG, PNG, WEBP).');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert('File size must be less than 5MB.');
+    return;
+  }
+
+  const tempId = 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    addImagePreview(tempId, e.target.result, null, true);
+  };
+  reader.readAsDataURL(file);
+  uploadImageToServer(file, tempId);
+}
+
+function addImagePreview(id, src, url, isUploading) {
+  const grid = document.getElementById('images-preview-grid');
+  const placeholder = document.getElementById('image-placeholder');
+  if (!grid || !placeholder) return;
+  placeholder.style.display = 'none';
+  grid.style.display = 'grid';
+
+  const div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'position:relative; border-radius:10px; overflow:hidden; aspect-ratio:1; border:2px solid rgba(226,232,240,1);';
+  div.innerHTML = `
+    <img src="${src}" style="width:100%; height:100%; object-fit:cover; ${isUploading ? 'opacity:0.6;' : ''}">
+    ${isUploading ? '<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;"><div style="width:20px; height:20px; border:2px solid rgba(245,200,66,1); border-top-color:transparent; border-radius:50%; animation: spin 1s linear infinite;"></div></div>' : ''}
+    <button type="button" onclick="removeImage('${id}')" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border:none; border-radius:50%; background:rgba(184,50,50,0.9); color:#fff; font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">&times;</button>
+  `;
+  grid.appendChild(div);
+}
+
+async function uploadImageToServer(file, tempId) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Image upload failed');
+    }
+
+    const div = document.getElementById(tempId);
+    if (div) {
+      const img = div.querySelector('img');
+      if (img) img.style.opacity = '1';
+      const spinner = div.querySelector('div[style*="animation: spin"]');
+      if (spinner) spinner.remove();
+      div.dataset.url = data.url;
+    }
+
+    uploadedImages.push({ id: tempId, url: data.url });
+    updateMediaInputs();
+  } catch (err) {
+    console.error('Image upload failed:', err);
+    removeImage(tempId);
+    alert('Failed to upload image. Please try again.');
+  }
+}
+
+function removeImage(id) {
+  const div = document.getElementById(id);
+  if (div) div.remove();
+  uploadedImages = uploadedImages.filter(img => img.id !== id);
+  if (!uploadedImages.length) {
+    const grid = document.getElementById('images-preview-grid');
+    const placeholder = document.getElementById('image-placeholder');
+    if (grid) grid.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
+  }
+  updateMediaInputs();
+}
+
+function updateImageUrlsInput() {
+  const urls = uploadedImages.map(img => img.url);
+  const input = document.getElementById('image-urls');
+  if (input) input.value = JSON.stringify(urls);
+}
+
+function clearAllImages() {
+  const grid = document.getElementById('images-preview-grid');
+  const placeholder = document.getElementById('image-placeholder');
+  if (grid) {
+    grid.innerHTML = '';
+    grid.style.display = 'none';
+  }
+  if (placeholder) placeholder.style.display = 'flex';
+  uploadedImages = [];
+  updateMediaInputs();
+}
+
+function onDragOver(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const area = document.getElementById('image-upload-area');
+  if (area) area.classList.add('drag-over');
+}
+
+function onDragLeave(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const area = document.getElementById('image-upload-area');
+  if (area) area.classList.remove('drag-over');
+}
+
+function onDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const area = document.getElementById('image-upload-area');
+  if (area) area.classList.remove('drag-over');
+  const files = event.dataTransfer.files;
+  if (files && files.length) {
+    Array.from(files).forEach(file => handleFile(file));
+  }
+}
+
+function onVideoSelected(event) {
+  const files = event.target.files;
+  if (files.length > 0) {
+    handleVideo(files[0]);
+  }
+  event.target.value = '';
+}
+
+function handleVideo(file) {
+  if (!file.type.startsWith('video/')) {
+    alert('Please select a video file (MP4, WEBM, MOV).');
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    alert('Video file too large. Maximum size is 50MB.');
+    return;
+  }
+
+  const videoEl = document.createElement('video');
+  videoEl.preload = 'metadata';
+  videoEl.onloadedmetadata = () => {
+    if (videoEl.duration > 30) {
+      alert('Video clips must be 30 seconds or shorter.');
+      URL.revokeObjectURL(videoEl.src);
+      return;
+    }
+
+    clearAllImages();
+    const tempId = 'vid-' + Date.now();
+    const blobUrl = URL.createObjectURL(file);
+    addVideoPreview(tempId, blobUrl);
+    uploadVideoToServer(file, tempId);
+  };
+  videoEl.onerror = () => {
+    alert('Failed to load video file. Please check the file format.');
+  };
+  videoEl.src = URL.createObjectURL(file);
+}
+
+function addVideoPreview(id, blobUrl) {
+  const preview = document.getElementById('video-preview');
+  const placeholder = document.getElementById('video-placeholder');
+  if (!preview || !placeholder) return;
+  placeholder.style.display = 'none';
+  preview.style.display = 'block';
+
+  const videoEl = document.getElementById('video-preview-element');
+  if (videoEl) {
+    videoEl.id = id;
+    videoEl.src = blobUrl;
+  }
+  uploadedVideo = { id, url: '', media_type: 'video' };
+  updateMediaInputs();
+}
+
+async function uploadVideoToServer(file, tempId) {
+  const formData = new FormData();
+  formData.append('file', file);
+  showUploadProgress(0);
+
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Video upload failed');
+    }
+
+    const videoEl = document.getElementById(tempId) || document.getElementById('video-preview-element');
+    if (videoEl) {
+      videoEl.src = data.url;
+    }
+    uploadedVideo = { id: tempId, url: data.url, media_type: data.media_type || 'video' };
+    updateMediaInputs();
+  } catch (err) {
+    console.error('Video upload failed:', err);
+    clearVideo();
+    alert('Failed to upload video. Please try again.');
+  } finally {
+    hideUploadProgress();
+  }
+}
+
+function showUploadProgress(percent) {
+  const overlay = document.getElementById('image-upload-progress');
+  const fill = document.getElementById('progress-fill');
+  const text = document.getElementById('progress-text');
+  if (!overlay || !fill || !text) return;
+  overlay.style.display = 'block';
+  fill.style.width = `${percent}%`;
+  text.textContent = `Uploading ${percent}%`;
+}
+
+function hideUploadProgress() {
+  const overlay = document.getElementById('image-upload-progress');
+  const fill = document.getElementById('progress-fill');
+  const text = document.getElementById('progress-text');
+  if (!overlay || !fill || !text) return;
+  overlay.style.display = 'none';
+  fill.style.width = '0%';
+  text.textContent = 'Uploading...';
+}
+
+function clearVideo() {
+  const preview = document.getElementById('video-preview');
+  const placeholder = document.getElementById('video-placeholder');
+  const videoEl = document.getElementById('video-preview-element');
+  if (preview) preview.style.display = 'none';
+  if (placeholder) placeholder.style.display = 'flex';
+  if (videoEl) videoEl.src = '';
+  uploadedVideo = null;
+  updateMediaInputs();
+}
+
+function onVideoDrop(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const area = document.getElementById('video-upload-area');
+  if (area) area.classList.remove('drag-over');
+  const files = event.dataTransfer.files;
+  if (files && files.length) {
+    handleVideo(files[0]);
+  }
+}
+
+function updateMediaInputs() {
+  const imageInput = document.getElementById('image-urls');
+  const videoInput = document.getElementById('video-url');
+  const mediaTypeInput = document.getElementById('media-type');
+  if (!imageInput || !videoInput || !mediaTypeInput) return;
+
+  if (uploadedVideo && uploadedVideo.url) {
+    imageInput.value = '[]';
+    videoInput.value = uploadedVideo.url;
+    mediaTypeInput.value = 'video';
+  } else if (uploadedImages.length) {
+    imageInput.value = JSON.stringify(uploadedImages.map(img => img.url));
+    videoInput.value = '';
+    mediaTypeInput.value = 'image';
+  } else {
+    imageInput.value = '[]';
+    videoInput.value = '';
+    mediaTypeInput.value = 'image';
+  }
+}
+
 /* ── PIN MODAL ── */
 function openPinModal(pinId) {
   const pin = allPins.find(p => p.pin_id === pinId);
@@ -414,6 +696,8 @@ function closeCreateModal(event) {
   if (err) { err.classList.remove('show'); err.textContent = ''; }
   const success = document.getElementById('success-msg');
   if (success) { success.classList.remove('show'); }
+  clearAllImages();
+  clearVideo();
 }
 
 async function createPin(event) {
@@ -433,6 +717,14 @@ async function createPin(event) {
     const selectedLocation = locations.find(l => l.location_id === selectedLocationId);
     const locationName = selectedLocation ? selectedLocation.location_name : null;
 
+    const imageUrls = (() => {
+      const input = document.getElementById('image-urls');
+      if (!input) return [];
+      try { return JSON.parse(input.value || '[]'); } catch (e) { return []; }
+    })();
+    const videoUrl = document.getElementById('video-url')?.value || '';
+    const mediaType = document.getElementById('media-type')?.value || 'image';
+
     const data = {
       author: author,
       title: title,
@@ -443,9 +735,9 @@ async function createPin(event) {
       latitude: selectedLocation ? selectedLocation.latitude : null,
       longitude: selectedLocation ? selectedLocation.longitude : null,
       visibility: 'public',
-      image_urls: [],
-      image_url: null,
-      media_type: 'image'
+      image_urls: imageUrls,
+      video_url: videoUrl,
+      media_type: mediaType
     };
 
     const res = await fetch('/api/pins', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
@@ -574,6 +866,41 @@ function openImageViewer(imageUrl) {
             <input type="checkbox" id="cat-arts" name="category" value="arts">
             <label for="cat-arts" class="category-chip">🎨 <span class="chip-label">Arts &amp; Creativity</span></label>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label>Media <span>(optional — add photos OR a video clip, not both)</span></label>
+          <div class="image-upload-area" id="image-upload-area" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <input type="file" id="pin-image" accept="image/*" multiple style="display:none;" onchange="onImageSelected(event)">
+            <div class="image-upload-placeholder" id="image-placeholder" onclick="document.getElementById('pin-image').click()">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <p>Click or drag & drop photos here</p>
+              <span>JPEG, PNG, WEBP up to 5MB each</span>
+            </div>
+            <div id="images-preview-grid" style="display:none; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap:0.5rem; margin-top:0.75rem;"></div>
+          </div>
+
+          <div class="image-upload-area" id="video-upload-area" style="margin-top:1rem;" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onVideoDrop(event)">
+            <input type="file" id="pin-video" accept="video/mp4,video/webm,video/quicktime" style="display:none;" onchange="onVideoSelected(event)">
+            <div class="image-upload-placeholder" id="video-placeholder" onclick="document.getElementById('pin-video').click()">
+              <i class="fas fa-film"></i>
+              <p>Click or drag & drop a video clip here</p>
+              <span>MP4, WEBM, MOV up to 30 seconds, 50MB max</span>
+            </div>
+            <div id="video-preview" style="display:none; margin-top:0.75rem;">
+              <video id="video-preview-element" style="width:100%; max-width:300px; border-radius:8px; background:#000;" controls></video>
+              <button type="button" class="btn btn-secondary" onclick="clearVideo()" style="margin-top:0.5rem;">Remove Video</button>
+            </div>
+          </div>
+
+          <div class="image-upload-progress" id="image-upload-progress" style="display:none; margin-top:0.75rem;">
+            <div class="progress-bar" style="background:rgba(0,0,0,0.08); border-radius:999px; overflow:hidden; height:10px; margin-bottom:0.5rem;"><div class="progress-fill" id="progress-fill" style="width:0%; height:100%; background:var(--gold);"></div></div>
+            <span id="progress-text">Uploading...</span>
+          </div>
+
+          <input type="hidden" id="image-urls" value="[]">
+          <input type="hidden" id="video-url" value="">
+          <input type="hidden" id="media-type" value="image">
         </div>
 
         <input type="hidden" id="location-lat">
