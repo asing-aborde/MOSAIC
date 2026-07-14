@@ -35,10 +35,11 @@ jwt = JWTManager(app)
 
 # Database Configuration
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'database': os.getenv('DB_NAME', 'adnu_mosaic')
+    'host': os.getenv('MYSQLHOST', os.getenv('DB_HOST', 'localhost')),
+    'user': os.getenv('MYSQLUSER', os.getenv('DB_USER', 'root')),
+    'password': os.getenv('MYSQLPASSWORD', os.getenv('DB_PASSWORD', '')),
+    'database': os.getenv('MYSQLDATABASE', os.getenv('DB_NAME', 'adnu_mosaic')),
+    'port': int(os.getenv('MYSQLPORT', 3306))
 }
 
 SUPPORTED_REACTIONS = ['❤️', '😮', '😂', '😡', '👏']
