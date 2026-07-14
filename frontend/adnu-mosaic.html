@@ -99,6 +99,7 @@ function resolveImageUrl(url) {
 }
 
 let allPins = [];
+let locations = [];
 
 /* ── Page routing ── */
 function showPage(page) {
@@ -262,8 +263,64 @@ window.addEventListener('load', () => {
     document.getElementById('loader').classList.add('hidden');
     document.getElementById('loader').remove();
   }
+  loadLocations();
   loadPins();
 });
+
+async function loadLocations() {
+  const select = document.getElementById('location-name');
+  if (select && select.options.length === 1) {
+    select.options[0].text = 'Loading locations...';
+  }
+
+  try {
+    const res = await fetch('/api/locations');
+    if (!res.ok) throw new Error('Failed to load locations');
+    locations = await res.json();
+    populateLocationDropdown();
+  } catch (err) {
+    console.warn('Could not load locations:', err);
+    if (select) {
+      select.options[0].text = 'Unable to load locations';
+    }
+  }
+}
+
+function populateLocationDropdown() {
+  const select = document.getElementById('location-name');
+  if (!select) return;
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
+
+  if (!locations.length) {
+    select.options[0].text = 'No locations available';
+    return;
+  }
+
+  select.options[0].text = 'Select a building or location...';
+  locations.forEach(loc => {
+    const option = document.createElement('option');
+    option.value = loc.location_id;
+    option.textContent = loc.location_name;
+    select.appendChild(option);
+  });
+}
+
+function onLocationChange() {
+  const select = document.getElementById('location-name');
+  if (!select) return;
+  const locationId = parseInt(select.value, 10);
+  if (!locationId) {
+    document.getElementById('location-lat').value = '';
+    document.getElementById('location-lng').value = '';
+    return;
+  }
+  const location = locations.find(l => l.location_id === locationId);
+  if (!location) return;
+  document.getElementById('location-lat').value = location.latitude || '';
+  document.getElementById('location-lng').value = location.longitude || '';
+}
 
 /* ── PIN MODAL ── */
 function openPinModal(pinId) {
@@ -338,6 +395,9 @@ function closePinModal(event) {
 function openCreateModal() {
   const overlay = document.getElementById('create-pin-overlay');
   if (!overlay) return;
+  if (!locations.length) {
+    loadLocations();
+  }
   overlay.classList.add('visible');
   document.body.style.overflow = 'hidden';
 }
@@ -369,11 +429,19 @@ async function createPin(event) {
     const categoryBoxes = Array.from(document.querySelectorAll('#category-options input[type=checkbox]:checked'));
     const category = categoryBoxes.map(b => b.value).join(',') || null;
 
+    const selectedLocationId = parseInt(document.getElementById('location-name').value, 10) || null;
+    const selectedLocation = locations.find(l => l.location_id === selectedLocationId);
+    const locationName = selectedLocation ? selectedLocation.location_name : null;
+
     const data = {
       author: author,
       title: title,
       category: category,
       content: content,
+      location_id: selectedLocationId,
+      location_name: locationName,
+      latitude: selectedLocation ? selectedLocation.latitude : null,
+      longitude: selectedLocation ? selectedLocation.longitude : null,
       visibility: 'public',
       image_urls: [],
       image_url: null,
@@ -453,7 +521,7 @@ function openImageViewer(imageUrl) {
 
         <div class="form-group">
           <label for="location-name">Building / Location <span>(pin will appear here on map)</span></label>
-          <select id="location-name" onchange="/* no-op for non-map page */" required>
+          <select id="location-name" onchange="onLocationChange()" required>
             <option value="">Select a building or location...</option>
           </select>
         </div>
