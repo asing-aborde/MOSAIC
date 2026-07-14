@@ -91,7 +91,7 @@
 
 <script>
 /* ── Flask API base URL ── */
-const API = 'http://127.0.0.1:5000';
+const API = '';
 
 function resolveImageUrl(url) {
   if (!url) return url;
@@ -155,7 +155,7 @@ async function loadPins() {
   const grid = document.getElementById('pins-grid');
   grid.innerHTML = '<p style="color:var(--gray-400);padding:2rem;grid-column:1/-1;">Loading pins from database…</p>';
   try {
-    const res  = await fetch('http://127.0.0.1:5000/api/pins');
+    const res = await fetch('/api/pins');
     const data = await res.json();
     if (!res.ok) { grid.innerHTML = '<p style="color:var(--danger);padding:2rem;grid-column:1/-1;">Failed to load pins.</p>'; return; }
     allPins = [...data].sort((a, b) => {

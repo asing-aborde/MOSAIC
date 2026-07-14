@@ -23,5 +23,6 @@ __pycache__/
 Thumbs.db
 
 # Uploaded files
-frontend/uploads/
+frontend/uploads/*
+!frontend/uploads/.gitkeep
 uploads/

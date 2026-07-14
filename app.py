@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -6,19 +7,21 @@ from werkzeug.utils import secure_filename
 import mysql.connector
 from mysql.connector import Error
 from datetime import timedelta
-import os
 import json
 from dotenv import load_dotenv
 
 load_dotenv()
 
-frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+# Production-friendly path resolution
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+frontend_path = os.path.join(BASE_DIR, 'frontend')
+
 UPLOAD_FOLDER = os.path.join(frontend_path, 'uploads')
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'mov'}
 ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_VIDEO_EXTENSIONS
-MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
-MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+MAX_VIDEO_SIZE = 50 * 1024 * 1024
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__, static_folder=frontend_path, static_url_path='/static')
