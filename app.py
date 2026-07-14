@@ -41,7 +41,6 @@ db_config = {
     'database': os.getenv('MYSQLDATABASE', os.getenv('DB_NAME', 'adnu_mosaic')),
     'port': int(os.getenv('MYSQLPORT', 3306))
 }
-
 SUPPORTED_REACTIONS = ['❤️', '😮', '😂', '😡', '👏']
 REACTION_LABELS = {
     '❤️': 'Loved this',
